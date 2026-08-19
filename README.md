@@ -44,6 +44,15 @@ rake fontico:build     # resolve, normalise, emit
 rake fontico:update    # re-fetch, ignoring icons.lock
 ```
 
+Artifacts land in `app/assets/builds/`, which Propshaft serves automatically —
+no manifest, no precompile list. `rake assets:precompile` is hooked, so deploys
+need no extra step.
+
+That directory is gitignored in a stock Rails app, so nothing is committed from
+it. **`icons.lock` is the thing you commit**: it holds every normalised body,
+so a deploy rebuilds the sprite from it in milliseconds with no network access
+and no Node.
+
 Measured on 35 icons across two remote providers and five local files:
 **361ms cold, 2ms warm.** Vendor icons are fetched in one batched request per
 provider — not one per icon.

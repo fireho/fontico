@@ -29,3 +29,27 @@ namespace :fontico do
     Rake::Task["fontico:build"].invoke
   end
 end
+
+# Deploys just work: Propshaft serves whatever is in app/assets/builds, and
+# that directory is gitignored in a stock Rails app, so the artifacts have to
+# be regenerated during precompile rather than committed.
+#
+# Same hook jsbundling-rails uses for javascript:build.
+if Rake::Task.task_defined?("assets:precompile")
+  Rake::Task["assets:precompile"].enhance(["fontico:build"])
+end
+
+if Rake::Task.task_defined?("assets:clobber")
+  Rake::Task["assets:clobber"].enhance(["fontico:clobber"])
+end
+
+namespace :fontico do
+  desc "Remove generated icon artifacts (icons.lock is kept: it is source)"
+  task :clobber do
+    require "fontico"
+    %w[icons.svg icons.css icons.ttf].each do |name|
+      path = File.join(Fontico.root, Fontico.output_dir, name)
+      File.delete(path) if File.exist?(path)
+    end
+  end
+end
