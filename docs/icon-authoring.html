@@ -1,0 +1,371 @@
+<title>The 24×24 Contract</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --paper:#FAFAFB; --surface:#FFFFFF; --surface-2:#F3F5F8;
+  --ink:#15181E; --ink-soft:#565F6D; --ink-faint:#8A93A1;
+  --rule:#E2E5EA; --rule-strong:#CBD2DC;
+  --accent:#C8106A; --accent-ink:#C8106A; --accent-soft:#FCE7F1;
+  --ok:#1F7A4D; --ok-soft:#E6F4EC;
+  --warn:#8F5400; --warn-soft:#FBEEDA;
+  --stop:#A8221B; --stop-soft:#FBE8E6;
+  --shadow:0 1px 2px rgba(21,24,30,.05), 0 8px 24px -12px rgba(21,24,30,.14);
+  --grid:rgba(86,95,109,.10);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1116; --surface:#161A21; --surface-2:#1C222B;
+    --ink:#E8EBEF; --ink-soft:#98A2B0; --ink-faint:#6B7583;
+    --rule:#262C36; --rule-strong:#39424F;
+    --accent:#FF5CA8; --accent-ink:#FF7DB9; --accent-soft:#3B0F26;
+    --ok:#5BC48E; --ok-soft:#10281D;
+    --warn:#E2A03F; --warn-soft:#2C2110;
+    --stop:#F0796F; --stop-soft:#2E1412;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+    --grid:rgba(152,162,176,.11);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1116; --surface:#161A21; --surface-2:#1C222B;
+  --ink:#E8EBEF; --ink-soft:#98A2B0; --ink-faint:#6B7583;
+  --rule:#262C36; --rule-strong:#39424F;
+  --accent:#FF5CA8; --accent-ink:#FF7DB9; --accent-soft:#3B0F26;
+  --ok:#5BC48E; --ok-soft:#10281D;
+  --warn:#E2A03F; --warn-soft:#2C2110;
+  --stop:#F0796F; --stop-soft:#2E1412;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+  --grid:rgba(152,162,176,.11);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"Public Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16.5px; line-height:1.65; -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{font-family:"Bricolage Grotesque","Public Sans",ui-sans-serif,system-ui,sans-serif;text-wrap:balance;margin:0}
+code,kbd,.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative; overflow:hidden;
+  border-bottom:1px solid var(--rule);
+  background:
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0/24px 24px,
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/24px 24px,
+    var(--surface);
+}
+.hero::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(120% 90% at 12% -10%, transparent 40%, var(--paper) 100%);
+}
+.hero .wrap{position:relative; z-index:1; padding-top:64px; padding-bottom:52px}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-weight:600;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 18px;
+}
+h1{font-size:clamp(2.5rem,6vw,4.15rem);line-height:.98;font-weight:800;letter-spacing:-.025em;max-width:15ch}
+.lede{margin:20px 0 0;max-width:62ch;font-size:1.14rem;color:var(--ink-soft)}
+.lede strong{color:var(--ink);font-weight:600}
+
+/* ---------- audit stats ---------- */
+.audit{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:10px;overflow:hidden;margin-top:38px}
+.audit div{background:var(--surface);padding:16px 18px}
+.audit b{display:block;font-family:"Bricolage Grotesque",sans-serif;font-size:1.95rem;font-weight:700;
+  line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.audit span{display:block;margin-top:7px;font-size:12.5px;line-height:1.4;color:var(--ink-soft)}
+.audit .hot b{color:var(--accent-ink)}
+.audit-note{margin:12px 0 0;font-size:12.5px;color:var(--ink-faint)}
+
+/* ---------- layout ---------- */
+.cols{display:grid;grid-template-columns:1fr;gap:0;padding:52px 0 88px}
+@media(min-width:1020px){ .cols{grid-template-columns:210px 1fr;gap:56px} }
+nav.toc{display:none}
+@media(min-width:1020px){
+  nav.toc{display:block;position:sticky;top:32px;align-self:start}
+  nav.toc p{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.15em;
+    text-transform:uppercase;color:var(--ink-faint);margin:0 0 14px}
+  nav.toc a{display:block;padding:6px 0 6px 13px;border-left:2px solid var(--rule);
+    color:var(--ink-soft);text-decoration:none;font-size:13.5px;line-height:1.4}
+  nav.toc a:hover{color:var(--accent-ink);border-left-color:var(--accent)}
+  nav.toc a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+}
+main{min-width:0}
+section+section{margin-top:56px}
+h2{font-size:1.72rem;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+h2 .n{font-family:"IBM Plex Mono",monospace;font-size:.85rem;font-weight:500;
+  color:var(--ink-faint);margin-right:12px;vertical-align:.32em;letter-spacing:.04em}
+.sub{color:var(--ink-soft);max-width:66ch;margin:0 0 26px}
+p{max-width:68ch}
+
+/* ---------- tier chips ---------- */
+.tier{display:inline-flex;align-items:center;gap:7px;font-family:"IBM Plex Mono",monospace;
+  font-size:10.5px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;
+  padding:4px 9px;border-radius:999px;margin-bottom:14px}
+.tier::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.t-ok{color:var(--ok);background:var(--ok-soft)}
+.t-warn{color:var(--warn);background:var(--warn-soft)}
+.t-stop{color:var(--stop);background:var(--stop-soft)}
+
+/* ---------- rule cards ---------- */
+.rules{display:grid;gap:12px}
+.rule{background:var(--surface);border:1px solid var(--rule);border-radius:11px;
+  padding:17px 19px;box-shadow:var(--shadow)}
+.rule h3{font-size:1.02rem;font-weight:700;letter-spacing:-.005em;display:flex;
+  align-items:baseline;gap:10px;flex-wrap:wrap}
+.rule h3 .tag{font-family:"IBM Plex Mono",monospace;font-size:10.5px;font-weight:500;
+  letter-spacing:.05em;color:var(--ink-faint);text-transform:none}
+.rule p{margin:8px 0 0;font-size:14.6px;color:var(--ink-soft);max-width:70ch}
+.rule p:last-child{margin-bottom:0}
+.rule .why{color:var(--ink-faint);font-size:13.4px}
+.s-ok{border-left:3px solid var(--ok)}
+.s-warn{border-left:3px solid var(--warn)}
+.s-stop{border-left:3px solid var(--stop)}
+
+/* ---------- code ---------- */
+pre{background:var(--surface-2);border:1px solid var(--rule);border-radius:9px;
+  padding:14px 16px;overflow-x:auto;margin:12px 0 0;font-size:13px;line-height:1.6}
+pre code{color:var(--ink)}
+:not(pre)>code{background:var(--surface-2);border:1px solid var(--rule);border-radius:5px;
+  padding:.1em .38em;font-size:.87em}
+.del{color:var(--stop)} .add{color:var(--ok)} .dim{color:var(--ink-faint)}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:11px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:14.3px}
+th,td{text-align:left;padding:11px 16px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-family:"IBM Plex Mono",monospace;font-size:10.5px;font-weight:600;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink-faint);background:var(--surface-2)}
+tr:last-child td{border-bottom:none}
+td code{white-space:nowrap}
+
+/* ---------- checklist ---------- */
+.check{background:var(--surface);border:1px solid var(--rule);border-radius:12px;
+  padding:8px 4px;box-shadow:var(--shadow)}
+.check ol{margin:0;padding:0;list-style:none;counter-reset:c}
+.check li{counter-increment:c;display:flex;gap:14px;padding:11px 18px;
+  border-bottom:1px solid var(--rule);font-size:14.7px;align-items:flex-start}
+.check li:last-child{border-bottom:none}
+.check li::before{content:counter(c,decimal-leading-zero);font-family:"IBM Plex Mono",monospace;
+  font-size:11.5px;font-weight:600;color:var(--accent-ink);padding-top:3px;flex:none;
+  font-variant-numeric:tabular-nums}
+.check li b{font-weight:600}
+.check li span{color:var(--ink-soft)}
+
+.callout{border:1px solid var(--rule);border-left:3px solid var(--accent);
+  background:var(--accent-soft);border-radius:9px;padding:15px 18px;margin-top:22px}
+.callout p{margin:0;font-size:14.6px;max-width:70ch}
+.callout p+p{margin-top:9px}
+
+footer{border-top:1px solid var(--rule);padding:26px 0 44px;color:var(--ink-faint);font-size:13px}
+footer code{font-size:12.4px}
+a{color:var(--accent-ink)}
+</style>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">fontico · authoring spec</p>
+    <h1>The 24×24 Contract</h1>
+    <p class="lede">Every icon in the app — whether it comes from Lucide, Material Symbols, or your own hand — is merged into <strong>one build artifact</strong>. Vendor icons arrive uniform. Yours will not. This is the agreement between whoever draws the SVG and the pipeline that consumes it.</p>
+
+    <div class="audit">
+      <div class="hot"><b>34/40</b><span>sampled SVGs share <code>id="layer1"</code></span></div>
+      <div class="hot"><b>11</b><span>also share <code>id="path1"</code></span></div>
+      <div><b>4</b><span>embed raster <code>&lt;image&gt;</code> data</span></div>
+      <div><b>270.9</b><span>viewBox width on a file meant to be 24</span></div>
+      <div><b>1</b><span>ships live <code>&lt;text&gt;</code> instead of paths</span></div>
+    </div>
+    <p class="audit-note">Measured across 40 SVGs found on this machine. These are not hypothetical failure modes — they are what your editor exports today.</p>
+  </div>
+</header>
+
+<div class="wrap cols">
+  <nav class="toc" aria-label="Contents">
+    <p>Contents</p>
+    <a href="#auto">Handled for you</a>
+    <a href="#yours">Your job</a>
+    <a href="#never">Cannot be fixed</a>
+    <a href="#export">Export settings</a>
+    <a href="#checklist">Ship checklist</a>
+  </nav>
+
+  <main>
+    <section id="auto">
+      <span class="tier t-ok">Handled automatically</span>
+      <h2><span class="n">01</span>What the preprocessor absorbs</h2>
+      <p class="sub">You do not have to hand-clean exports. Every SVG entering <code>app/assets/icons/</code> passes through normalisation before it reaches any emitter. These problems are solved, silently, on every build.</p>
+
+      <div class="rules">
+        <div class="rule s-ok">
+          <h3>Editor chrome is stripped <span class="tag">sodipodi · inkscape · metadata</span></h3>
+          <p>Namespaced editor state, RDF metadata blocks, XML declarations, DOCTYPEs, comments, and empty <code>&lt;defs&gt;</code> are removed entirely. An Inkscape file carrying window geometry and zoom level loses all of it.</p>
+          <pre><code><span class="del">- &lt;sodipodi:namedview inkscape:zoom="0.19" inkscape:window-x="236" …/&gt;</span>
+<span class="del">- &lt;metadata id="metadata1"&gt;&lt;rdf:RDF&gt;…&lt;/rdf:RDF&gt;&lt;/metadata&gt;</span>
+<span class="del">- &lt;defs id="defs1" /&gt;</span></code></pre>
+        </div>
+
+        <div class="rule s-ok">
+          <h3>Every id is namespaced <span class="tag">the collision fix</span></h3>
+          <p>Ids are rewritten to <code>&lt;slug&gt;__&lt;id&gt;</code>, and every internal reference is rewritten with them — <code>url(#…)</code> in fills and strokes, <code>href</code>, <code>clip-path</code>, <code>mask</code>, <code>filter</code>. This is what makes generic sequential ids safe to merge.</p>
+          <pre><code><span class="del">- &lt;linearGradient id="path1"&gt;   fill="url(#path1)"</span>
+<span class="add">+ &lt;linearGradient id="logo__path1"&gt;   fill="url(#logo__path1)"</span></code></pre>
+          <p class="why">Without this, two icons both defining <code>path1</code> collapse into one definition and the second silently wins. With 34 of 40 files sharing <code>layer1</code>, collision is the default outcome, not the edge case.</p>
+        </div>
+
+        <div class="rule s-ok">
+          <h3>viewBox is rescaled to the common box</h3>
+          <p>Any source box is fitted into the target, centred, aspect preserved, via a wrapping transform. Absolute <code>width</code>/<code>height</code> attributes are dropped so the icon scales with its container instead of pinning itself to 1024px.</p>
+          <p class="why">This matters beyond your own files: Lucide and Material are both 24, but <code>fa6-solid</code> is 512 with per-icon overrides to 576, and <code>bi</code> declares no width at all. The pipeline cannot assume a number.</p>
+        </div>
+
+        <div class="rule s-ok">
+          <h3>Colour is folded to <code>currentColor</code></h3>
+          <p>Single-colour icons get their fills and strokes rewritten so they inherit CSS <code>color</code> like text. Icons declared <code>multicolor: true</code> in the manifest keep their palette untouched.</p>
+        </div>
+
+        <div class="rule s-ok">
+          <h3>Unsafe content is removed</h3>
+          <p><code>&lt;script&gt;</code>, all <code>on*</code> event handlers, <code>&lt;foreignObject&gt;</code>, and any external reference are dropped. An SVG from a designer is untrusted markup that you are about to inline into your DOM — an inlined handler in a sprite <code>&lt;symbol&gt;</code> executes.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="yours">
+      <span class="tier t-warn">Your job when drawing</span>
+      <h2><span class="n">02</span>What the pipeline can't decide for you</h2>
+      <p class="sub">Normalisation fixes structure. It cannot fix judgement. These are geometry and composition choices that have to be right in the source file.</p>
+
+      <div class="rules">
+        <div class="rule s-warn">
+          <h3>Draw on a 24×24 grid, snapped to whole pixels</h3>
+          <p>Set the document to 24×24 units and align edges to integers (half-integers for 1px-wide strokes). Rescaling from 270.93 to 24 is arithmetic the pipeline will do, but coordinates that were never on a grid stay off-grid afterwards, and land blurry at 16px.</p>
+        </div>
+
+        <div class="rule s-warn">
+          <h3>Leave a 1–2 unit margin inside the box</h3>
+          <p>Artwork should occupy roughly the middle 20–22 units. Icons drawn edge-to-edge appear oversized beside vendor icons that respect the same padding, and the mismatch is obvious in a toolbar.</p>
+        </div>
+
+        <div class="rule s-warn">
+          <h3>Match the stroke weight you're sitting next to</h3>
+          <p>Lucide is 2 units at 24 with round caps and round joins. A first-party icon at 1.5 or 3 reads as a different family even when the shapes are right.</p>
+        </div>
+
+        <div class="rule s-warn">
+          <h3>Outline your strokes if the icon goes in a font <span class="tag">required, not optional</span></h3>
+          <p>Save the artwork as filled contours rather than stroked centrelines. Nothing downstream can do this losslessly, so a stroked first-party icon in a font target stops the build by name rather than shipping a blob. The sprite renders strokes natively and does not care.</p>
+        </div>
+
+        <div class="rule s-warn">
+          <h3>Union overlapping shapes; avoid self-intersection</h3>
+          <p>Merge overlapping subpaths into one contour before saving (<span class="mono">Path → Union</span>). Fonts fill by non-zero winding, so overlaps and reversed contour directions turn holes solid — the classic icon-font artifact.</p>
+        </div>
+
+        <div class="rule s-warn">
+          <h3>Flatten transforms into coordinates</h3>
+          <p>Nested <code>transform=</code> chains survive normalisation but compound with the fitting transform and make debugging geometry miserable. In Inkscape: <span class="mono">Preferences → Behaviour → Transforms → Store transformation: Optimized</span>.</p>
+        </div>
+
+        <div class="rule s-warn">
+          <h3>Name the file as the slug</h3>
+          <p>The filename is the identifier. <code>empty-box.svg</code> resolves as <code>local/empty-box</code>. Lowercase, hyphens, no spaces, no version suffixes — <code>logo-final-v3.svg</code> becomes an icon literally named <code>logo-final-v3</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="never">
+      <span class="tier t-stop">No preprocessing can save these</span>
+      <h2><span class="n">03</span>Hard failures</h2>
+      <p class="sub">Four things are not cleanup problems. They are properties of the output format, and the only fix is upstream in the drawing.</p>
+
+      <div class="rules">
+        <div class="rule s-stop">
+          <h3>Live <code>&lt;text&gt;</code> elements</h3>
+          <p>Text renders with whatever font the viewer's machine has, or nothing. It cannot become a glyph outline at all. Convert every text object to paths before saving — <span class="mono">Path → Object to Path</span> in Inkscape, <span class="mono">Type → Create Outlines</span> in Illustrator, <span class="mono">Outline text</span> on Figma export.</p>
+          <p class="why">A real file in your projects is 1782 bytes whose entire artwork is one <code>&lt;text&gt;</code> node at <code>font-size:238.845px</code>. It will render differently on every machine that opens it.</p>
+        </div>
+
+        <div class="rule s-stop">
+          <h3>Embedded raster <code>&lt;image&gt;</code> data</h3>
+          <p>A base64 PNG inside an SVG defeats the entire point: it does not scale, it cannot be a glyph, and it inflates the sprite by orders of magnitude. Redraw as vector or keep it out of the icon set.</p>
+        </div>
+
+        <div class="rule s-stop">
+          <h3>Multiple colours, in a font target</h3>
+          <p>A TrueType glyph stores <em>no colour</em> — it is filled contours, coloured at render time by CSS <code>color</code>. Two-tone is unrepresentable, not merely difficult. Multicolour icons ride in the sprite and are skipped by the font emitter, which reports each one it dropped.</p>
+        </div>
+
+        <div class="rule s-stop">
+          <h3>Filters, blurs, and blend modes</h3>
+          <p><code>&lt;filter&gt;</code> effects do not survive font conversion and are expensive to rasterise in a sprite. Bake the effect into geometry or drop it.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><b>The stroke trap, specifically.</b> A stroked path with <code>fill="none"</code> does not fail loudly in a font — it fills the <em>centreline</em> as a solid region and produces a blob that looks nothing like the icon.</p>
+        <p><b>Strokes are not expanded for you.</b> Both published JavaScript expanders run the artwork through potrace: they rasterise, re-trace, and hand back rounded corners and wobbling stems. Rather than ship geometry that quietly stopped matching the sprite, the build <em>refuses</em> and names the icon.</p>
+        <p>Vendor sets are handled — where a provider publishes its own font, outlines are lifted from there, already expanded and tuned by the people who drew them. For <b>your</b> icons there is no such source, so outlining is your job: <span class="mono">Path → Stroke to Path</span> in Inkscape, <span class="mono">Object → Path → Outline Stroke</span> in Illustrator, <span class="mono">Outline stroke</span> in Figma.</p>
+      </div>
+    </section>
+
+    <section id="export">
+      <h2><span class="n">04</span>Export settings</h2>
+      <p class="sub">Getting these right removes most of the cleanup before it starts, and makes diffs on icon files readable.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Tool</th><th>Do this</th><th>Not this</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>Inkscape</b></td>
+              <td><span class="mono">File → Save As → Optimized SVG</span>, with <em>Remove metadata</em>, <em>Remove comments</em>, and <em>Remove unused defs</em> checked; 3 decimal places</td>
+              <td><span class="mono">Inkscape SVG</span> — keeps <code>sodipodi:</code>, <code>inkscape:</code>, layer state, window geometry</td>
+            </tr>
+            <tr>
+              <td><b>Illustrator</b></td>
+              <td><span class="mono">Export As → SVG</span>, Styling: <em>Presentation Attributes</em>, Object IDs: <em>Minimal</em>, Decimals 2, Responsive <em>off</em></td>
+              <td>Styling: <em>Internal CSS</em> — emits a <code>&lt;style&gt;</code> block whose class names collide exactly like ids do</td>
+            </tr>
+            <tr>
+              <td><b>Figma</b></td>
+              <td>Frame at 24×24, <span class="mono">Export → SVG</span> with <em>Outline text</em> on and <em>Include "id" attribute</em> off</td>
+              <td>Exporting a nested component — brings the wrapper frame in as an extra clip path</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="checklist">
+      <h2><span class="n">05</span>Before you commit the file</h2>
+      <p class="sub">Run this once per icon. It takes under a minute and prevents every failure documented above.</p>
+
+      <div class="check">
+        <ol>
+          <li><b>Document is 24×24</b><span>&nbsp;— and the artwork sits inside the middle 20–22 units.</span></li>
+          <li><b>All text converted to paths</b><span>&nbsp;— no <code>&lt;text&gt;</code> or <code>&lt;tspan&gt;</code> anywhere in the file.</span></li>
+          <li><b>No embedded images</b><span>&nbsp;— search the file for <code>&lt;image</code> and for <code>base64</code>.</span></li>
+          <li><b>Overlapping shapes unioned</b><span>&nbsp;— one contour per visual region.</span></li>
+          <li><b>Single colour is pure black</b><span>&nbsp;— unless the icon is genuinely multicolour, in which case flag it in the manifest.</span></li>
+          <li><b>Saved as Optimized / Plain SVG</b><span>&nbsp;— not the editor's native format.</span></li>
+          <li><b>Filename is the slug</b><span>&nbsp;— lowercase, hyphenated, final.</span></li>
+          <li><b>Rendered at 16px</b><span>&nbsp;— if it turns to mud, the coordinates are off-grid.</span></li>
+        </ol>
+      </div>
+
+      <div class="callout">
+        <p><b>You do not have to be perfect.</b> Items 1–8 make the output better and the diffs smaller, but the preprocessor is the safety net — a raw Inkscape export with <code>layer1</code>, a 270.93 viewBox, and editor metadata still builds correctly. Only section 03 contains things it genuinely cannot rescue.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="wrap">
+  Authoring spec for <code>app/assets/icons/</code> · icons declared in <code>icons.yml</code> · rebuild with <code>rake fontico:build</code>
+</footer>

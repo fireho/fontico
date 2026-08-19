@@ -1,0 +1,54 @@
+# icons.yml — every icon in the app, named by intent, sourced from anywhere.
+# Templates only ever say icon("cool-name"). This file owns the rest.
+
+defaults:
+  provider: lucide          # bare names resolve here: `save` == `lucide/save`
+
+targets: [sprite, ttf]
+
+providers:
+  lucide:           { license: ISC }
+  material-symbols: { license: Apache-2.0 }
+  local:            { path: app/assets/icons }
+
+icons:
+  # 10 from lucide
+  save:        lucide/save
+  edit:        lucide/pencil
+  copy:        lucide/copy
+  search:      lucide/search
+  filter:      lucide/filter
+  refresh:     lucide/refresh-cw
+  external:    lucide/external-link
+  expand:      lucide/chevron-down
+  back:        lucide/arrow-left
+  loading:     lucide/loader-circle
+
+  # 20 from material
+  delete:      material-symbols/delete
+  add:         material-symbols/add
+  close:       material-symbols/close
+  confirm:     material-symbols/check
+  menu:        material-symbols/menu
+  settings:    material-symbols/settings
+  profile:     material-symbols/person
+  logout:      material-symbols/logout
+  download:    material-symbols/download
+  upload:      material-symbols/upload
+  success:     material-symbols/check-circle
+  error:       material-symbols/error
+  warning:     material-symbols/warning
+  info:        material-symbols/info
+  document:    material-symbols/description
+  folder:      material-symbols/folder
+  calendar:    material-symbols/calendar-month
+  mail:        material-symbols/mail
+  notify:      material-symbols/notifications
+  favorite:    material-symbols/star
+
+  # 5 from your folder
+  logo:        local/logo
+  logomark:    local/logomark
+  empty-box:   local/empty-box
+  spinner:     local/spinner
+  watermark:   local/watermark

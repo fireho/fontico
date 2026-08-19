@@ -1,0 +1,11 @@
+{
+  "name": "fontico-toolchain",
+  "private": true,
+  "type": "module",
+  "description": "Font assembly toolchain for the fontico gem. Installed on demand into a cache directory; not required unless a font target is built.",
+  "dependencies": {
+    "opentype.js": "^2.0.0",
+    "svgicons2svgfont": "^16.0.0",
+    "svg2ttf": "^6.1.0"
+  }
+}
