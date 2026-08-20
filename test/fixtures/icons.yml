@@ -48,3 +48,5 @@ icons:
   spinner: local/spinner
   watermark: local/watermark
   inkspace-1: local/inkspace-1
+  nav:
+    menu: material-symbols/menu

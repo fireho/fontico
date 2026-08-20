@@ -2,6 +2,7 @@
 
 require "minitest/autorun"
 require "tmpdir"
+require "fileutils"
 require "fontico"
 
 class ManifestTest < Minitest::Test
@@ -41,6 +42,177 @@ class ManifestTest < Minitest::Test
   end
 end
 
+# Iconify answers a renamed or mirrored icon out of "aliases", not "icons".
+# lucide/fingerprint is the live example: renamed to fingerprint-pattern, and
+# still the name every app in the wild asks for.
+class ResolverAliasTest < Minitest::Test
+  def resolve(slug, payload)
+    icon = Fontico::Icon.new(name: slug, provider: "lucide", slug: slug)
+    Fontico::Resolver.new(nil).send(:remote, icon, payload)
+  end
+
+  def payload(icons: {}, aliases: {}, **rest)
+    { "icons" => icons, "aliases" => aliases, "width" => 24, "height" => 24 }.merge(rest)
+  end
+
+  def test_alias_resolves_to_its_parent_body
+    src = resolve("fingerprint", payload(
+                    icons: { "fingerprint-pattern" => { "body" => "<path d='M0 0'/>" } },
+                    aliases: { "fingerprint" => { "parent" => "fingerprint-pattern" } }
+                  ))
+    assert_equal "<path d='M0 0'/>", src.markup
+  end
+
+  def test_alias_chain_is_followed_to_the_end
+    src = resolve("a", payload(
+                    icons: { "c" => { "body" => "<path/>" } },
+                    aliases: { "a" => { "parent" => "b" }, "b" => { "parent" => "c" } }
+                  ))
+    assert_equal "<path/>", src.markup
+  end
+
+  def test_mirrored_alias_wraps_the_parent_in_the_flip
+    src = resolve("arrow-left", payload(
+                    icons: { "arrow-right" => { "body" => "<path/>" } },
+                    aliases: { "arrow-left" => { "parent" => "arrow-right", "hFlip" => true } }
+                  ))
+    assert_equal %(<g transform="translate(24.0 0) scale(-1 1)"><path/></g>), src.markup
+  end
+
+  def test_rotation_composes_along_the_chain
+    src = resolve("a", payload(
+                    icons: { "c" => { "body" => "<path/>" } },
+                    aliases: { "a" => { "parent" => "b", "rotate" => 1 },
+                               "b" => { "parent" => "c", "rotate" => 1 } }
+                  ))
+    assert_equal %(<g transform="rotate(180 12.0 12.0)"><path/></g>), src.markup
+  end
+
+  def test_untransformed_alias_leaves_the_body_alone
+    src = resolve("a", payload(icons: { "b" => { "body" => "<path/>" } },
+                               aliases: { "a" => { "parent" => "b", "rotate" => 0 } }))
+    assert_equal "<path/>", src.markup
+  end
+
+  def test_alias_to_nowhere_still_reports_a_miss
+    err = assert_raises(Fontico::Resolver::Error) do
+      resolve("a", payload(aliases: { "a" => { "parent" => "gone" } }))
+    end
+    assert_match(%r{lucide/a: not found}, err.message)
+  end
+
+  def test_alias_cycle_is_named_rather_than_hung_on
+    err = assert_raises(Fontico::Resolver::Error) do
+      resolve("a", payload(aliases: { "a" => { "parent" => "b" }, "b" => { "parent" => "a" } }))
+    end
+    assert_match(/alias cycle a -> b -> a/, err.message)
+  end
+end
+
+# A manifest is a long list maintained by hand, so one entry is eventually
+# going to be wrong. That must cost the one icon, not the build.
+class ResolverMissingTest < Minitest::Test
+  def manifest(icons)
+    Fontico::Manifest.new(
+      { "providers" => { "lucide" => {}, "local" => { "path" => "icons" } },
+        "icons" => icons }
+    )
+  end
+
+  def with_icons(files)
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, "icons"))
+      files.each { |name| File.write(File.join(root, "icons", "#{name}.svg"), "<svg><path/></svg>") }
+      yield root
+    end
+  end
+
+  def test_a_local_icon_with_no_file_is_recorded_and_the_rest_resolve
+    with_icons(%w[here]) do |root|
+      m = manifest("here" => "local/here", "gone" => "local/gone")
+      resolver = Fontico::Resolver.new(m, root: root)
+      resolved = resolver.call
+
+      assert_equal ["here"], resolved.keys
+      assert_match(%r{local/gone: no such file}, resolver.missing.fetch("gone"))
+    end
+  end
+
+  def test_an_unknown_remote_icon_does_not_take_its_batch_down
+    m = manifest("real" => "lucide/real", "typo" => "lucide/typo")
+    resolver = Fontico::Resolver.new(m)
+    def resolver.fetch(_provider, _slugs)
+      { "icons" => { "real" => { "body" => "<path/>" } }, "aliases" => {},
+        "width" => 24, "height" => 24 }
+    end
+
+    resolved = resolver.call
+
+    assert_equal ["real"], resolved.keys
+    assert_match(%r{lucide/typo: not found}, resolver.missing.fetch("typo"))
+  end
+
+  def test_an_unreachable_provider_is_still_fatal
+    m = manifest("a" => "lucide/a")
+    resolver = Fontico::Resolver.new(m, api: "http://127.0.0.1:1")
+
+    assert_raises(Fontico::Resolver::Error) { resolver.call }
+  end
+end
+
+# The build keeps going, and the artifacts come out without the bad icon.
+class BuilderMissingTest < Minitest::Test
+  def test_the_sprite_is_written_without_the_missing_icon
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, "icons"))
+      File.write(File.join(root, "icons", "here.svg"), "<svg viewBox='0 0 24 24'><path d='M0 0'/></svg>")
+
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"],
+          "providers" => { "local" => { "path" => "icons" } },
+          "icons" => { "here" => "local/here", "gone" => "local/gone" } }
+      )
+      report = Fontico::Builder.new(m, root: root, output: "builds").call
+
+      assert_equal ["gone"], report.missing.keys
+      assert_equal ["here"], report.fetched
+
+      sprite = File.read(File.join(root, "builds", "icons.svg"))
+      assert_includes sprite, %(id="here")
+      refute_includes sprite, %(id="gone")
+    end
+  end
+
+  # An icon that built yesterday and whose entry was broken today must not
+  # hand its codepoint to the next icon added — the glyph it names in
+  # committed Prawn code would silently become a different picture.
+  def test_a_broken_entry_does_not_release_the_codepoint_it_already_holds
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, "icons"))
+      File.write(File.join(root, "icons", "logo.svg"), "<svg viewBox='0 0 24 24'><path d='M0 0'/></svg>")
+
+      build = lambda do |spec|
+        m = Fontico::Manifest.new(
+          { "targets" => ["sprite"],
+            "providers" => { "local" => { "path" => "icons" } },
+            "icons" => { "brand" => spec } }
+        )
+        Fontico::Builder.new(m, root: root, output: "builds").call
+      end
+
+      build.call("local/logo")
+      before = YAML.safe_load_file(File.join(root, "icons.lock"))["codepoints"]
+
+      report = build.call("local/logotype") # typo'd on the way in
+      after = YAML.safe_load_file(File.join(root, "icons.lock"))
+
+      assert_equal ["brand"], report.missing.keys
+      assert_equal before, after["codepoints"]
+      assert_empty after["retired"]
+    end
+  end
+end
+
 class PreprocessorTest < Minitest::Test
   def icon(name = "logo", multicolor: nil)
     Fontico::Icon.new(name: name, provider: "local", slug: name, multicolor: multicolor)
@@ -60,6 +232,12 @@ class PreprocessorTest < Minitest::Test
       </g>
     </svg>
   SVG
+
+  def test_strips_author_comments
+    body = run_on(%(<svg viewBox="0 0 24 24"><!-- where this came from --><path d="M0 0"/></svg>)).body
+    refute_includes body, "where this came from"
+    assert_includes body, "<path"
+  end
 
   def test_strips_editor_state
     body = run_on(INKSCAPE).body
@@ -340,6 +518,23 @@ class HelperTest < Minitest::Test
     assert_includes @view.icon("save", size: "2em"), 'width="2em"'
   end
 
+  # icons.css sets .ico { width: 1em }, and a stylesheet rule beats a
+  # presentation attribute — so an asked-for size only survives inline.
+  def test_explicit_size_is_inline_so_the_stylesheet_cannot_swallow_it
+    assert_includes @view.icon("save", size: 16), 'style="width:16px;height:16px"'
+    assert_includes @view.icon("save", size: "2em"), 'style="width:2em;height:2em"'
+  end
+
+  # ...and with no size asked for, nothing inline, so a utility class wins.
+  def test_unsized_icons_stay_class_drivable
+    refute_includes @view.icon("save", class: "h-7 w-7"), "style="
+  end
+
+  def test_caller_style_is_kept_alongside_the_size
+    markup = @view.icon("save", size: 16, style: "opacity:.5")
+    assert_includes markup, 'style="width:16px;height:16px;opacity:.5"'
+  end
+
   def test_decorative_by_default_and_labelled_when_titled
     assert_includes @view.icon("save"), 'aria-hidden="true"'
     titled = @view.icon("save", title: "Save file")
@@ -350,6 +545,32 @@ class HelperTest < Minitest::Test
 
   def test_references_the_symbol_by_manifest_name
     assert_includes @view.icon("save"), "#save"
+  end
+
+  # What a Vue/Stimulus template needs: the digest path and the dotted->dashed
+  # key are both things the client should be handed, not rebuild.
+  def test_icon_href_is_the_use_target_for_markup_built_elsewhere
+    assert_equal "/assets/icons.svg#save", @view.icon_href("save")
+    assert_equal "/assets/icons.svg#nav-menu", @view.icon_href("nav.menu")
+  end
+
+  def test_icon_href_refuses_a_name_the_manifest_does_not_have
+    err = assert_raises(Fontico::Error) { @view.icon_href("nope") }
+    assert_match(/no icon named "nope"/, err.message)
+  end
+
+  # Payload-building code — a serializer, a job, an ActionCable broadcast —
+  # has no view context, and that is exactly where icon_href gets used. The
+  # plain fallback only stands when there is no Rails at all.
+  def test_icon_href_outside_a_view_still_names_the_sprite
+    assert_equal "/assets/icons.svg#save", View.new.icon_href("save")
+  end
+
+  def test_icon_href_drops_the_path_in_inline_mode
+    Fontico.inline_sprite = true
+    assert_equal "#save", @view.icon_href("save")
+  ensure
+    Fontico.inline_sprite = false
   end
 end
 

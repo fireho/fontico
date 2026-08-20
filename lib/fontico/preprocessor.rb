@@ -43,6 +43,7 @@ module Fontico
 
       vb_w, vb_h, min_x, min_y = viewbox_of(root, width, height)
 
+      strip_comments!(root)
       strip_elements!(root)
       strip_attributes!(root)
       namespace_ids!(root)
@@ -80,6 +81,12 @@ module Fontico
       w = @size if w.zero?
       h = @size if h.zero?
       [w, h, 0.0, 0.0]
+    end
+
+    # Author notes are document furniture. Harmless in one file, but the
+    # sprite merges every body into one document, so they all ship together.
+    def strip_comments!(root)
+      REXML::XPath.each(root, "//comment()") { _1.parent&.delete(_1) }
     end
 
     def strip_elements!(root)

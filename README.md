@@ -53,6 +53,11 @@ it. **`icons.lock` is the thing you commit**: it holds every normalised body,
 so a deploy rebuilds the sprite from it in milliseconds with no network access
 and no Node.
 
+An icon that cannot be resolved — a typo'd slug, a local file that isn't
+there — is named in red and left out; the rest of the manifest still builds.
+It keeps its codepoint reserved, so fixing the entry and rebuilding brings it
+back with the same glyph. A provider that is unreachable is still fatal.
+
 Measured on 35 icons across two remote providers and five local files:
 **361ms cold, 2ms warm.** Vendor icons are fetched in one batched request per
 provider — not one per icon.
@@ -108,10 +113,18 @@ with whatever type it sits in, and a CSS class still wins over the attributes:
 
 ```erb
 <%= icon "save" %>                      <%# 1em, follows font-size          %>
+<%= icon "save", size: 18 %>            <%# a bare number means px          %>
 <%= icon "save", size: "2em" %>
 <%= icon "save", class: "size-6" %>     <%# Tailwind overrides the attrs    %>
 <%= icon "save", title: "Save file" %>  <%# role="img" + <title>, not hidden %>
 ```
+
+The two sizing routes do not fight. `width`/`height` on an `<svg>` are
+presentation attributes, and *any* CSS declaration outranks them — including
+`icons.css`'s own `.ico { width: 1em }`. So an explicit `size:` is written
+inline, where it beats the stylesheet, while an icon with no `size:` carries
+only the attributes and stays free for `class: "size-6"` to size instead. Ask
+for one or the other, not both.
 
 Colour needs no help: bodies are folded to `currentColor`. That is not a
 convenience — host CSS does **not** cascade into a cross-document `<use>`, but

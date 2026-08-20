@@ -12,25 +12,42 @@ module Fontico
 
     API = "https://api.iconify.design"
 
+    # Guards a malformed set; real chains are one or two hops.
+    MAX_ALIAS_DEPTH = 8
+
     Source = Struct.new(:markup, :width, :height, keyword_init: true)
+
+    # { "save" => "lucide/save: not found in provider lucide" } — icons this
+    # run could not resolve. Filled by #call; see the comment there.
+    attr_reader :missing
 
     def initialize(manifest, root: Dir.pwd, api: API)
       @manifest = manifest
       @root = root
       @api = api
+      @missing = {}
     end
 
     # => { "save" => Source, ... } keyed by icon name.
+    #
+    # One bad name in a manifest of two hundred used to take the whole build
+    # down, which meant a typo in an icon nobody had shipped yet blocked
+    # everyone. A single icon failing is now recorded in #missing and left
+    # out of the result; the caller reports it and builds the rest. Failures
+    # that are not per-icon — an unreachable API, a provider that 404s — are
+    # still raised, because then nothing would be correct.
     def call(only: nil)
       icons = @manifest.icons
       icons = icons.select { only.include?(_1.name) } if only
 
       resolved = {}
-      icons.select(&:local?).each { resolved[_1.name] = local(_1) }
+      icons.select(&:local?).each do |icon|
+        try(icon) { resolved[icon.name] = local(icon) }
+      end
 
       icons.reject(&:local?).group_by(&:provider).each do |provider, group|
         payload = fetch(provider, group.map(&:slug).uniq.sort)
-        group.each { resolved[_1.name] = remote(_1, payload) }
+        group.each { |icon| try(icon) { resolved[icon.name] = remote(icon, payload) } }
       end
 
       resolved
@@ -38,9 +55,16 @@ module Fontico
 
     private
 
+    def try(icon)
+      yield
+    rescue Error => e
+      @missing[icon.name] = e.message
+      nil
+    end
+
     def local(icon)
       path = File.join(@root, @manifest.local_path, "#{icon.slug}.svg")
-      raise Error, "#{icon.name}: no such file #{path}" unless File.exist?(path)
+      raise Error, "#{icon.source}: no such file #{path}" unless File.exist?(path)
 
       Source.new(markup: File.read(path))
     end
