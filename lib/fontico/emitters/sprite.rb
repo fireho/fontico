@@ -11,6 +11,7 @@ module Fontico
       end
 
       def accepts?(_icon) = true
+      def rules_only? = false
 
       def call
         symbols = @build.map do |icon, body|

@@ -13,7 +13,10 @@ module Fontico
         @manifest = manifest
       end
 
-      def accepts?(_icon) = false # contributes no icons, only rules
+      # Contributes no icons, only rules — so the builder must not count all
+      # 91 of them as "skipped" on its behalf.
+      def accepts?(_icon) = false
+      def rules_only?     = true
 
       def call
         <<~CSS

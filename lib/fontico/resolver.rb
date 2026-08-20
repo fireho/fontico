@@ -85,16 +85,64 @@ module Fontico
     end
 
     def remote(icon, payload)
-      data = payload.dig("icons", icon.slug)
+      data, transform = lookup(icon, payload)
       raise Error, "#{icon.source}: not found in provider #{icon.provider}" if data.nil?
 
       # Per-icon dimensions override the set default; fa6-solid ships 512
       # sets with 576 icons inside them.
+      width  = data["width"]  || payload["width"]
+      height = data["height"] || payload["height"]
+
       Source.new(
-        markup: data.fetch("body"),
-        width: data["width"] || payload["width"],
-        height: data["height"] || payload["height"]
+        markup: apply(transform, data.fetch("body"), width, height),
+        width: width,
+        height: height
       )
+    end
+
+    # Iconify keeps renames and mirrored variants out of "icons" and in
+    # "aliases", pointing at a parent that may itself be an alias. Without
+    # this, `lucide/fingerprint` — an alias since the icon was renamed to
+    # fingerprint-pattern — resolves to nothing and the build dies.
+    def lookup(icon, payload)
+      slug = icon.slug
+      transform = {}
+      seen = []
+
+      MAX_ALIAS_DEPTH.times do
+        return [payload.dig("icons", slug), transform] if payload.dig("icons", slug)
+
+        entry = payload.dig("aliases", slug)
+        return [nil, transform] if entry.nil?
+
+        # A transform is expressed relative to the parent, so an alias chain
+        # composes outwards: rotation adds, each flip toggles.
+        transform[:rotate] = (transform[:rotate].to_i + entry["rotate"].to_i) % 4
+        transform[:h_flip] = transform[:h_flip] ^ true if entry["hFlip"]
+        transform[:v_flip] = transform[:v_flip] ^ true if entry["vFlip"]
+
+        seen << slug
+        slug = entry["parent"]
+        raise Error, "#{icon.source}: alias cycle #{(seen << slug).join(" -> ")}" if seen.include?(slug)
+      end
+
+      raise Error, "#{icon.source}: alias chain deeper than #{MAX_ALIAS_DEPTH} in #{icon.provider}"
+    end
+
+    # Flip about the box centre, then rotate about it in quarter turns —
+    # the order Iconify defines. Emitted as one wrapping <g> so the body
+    # itself is untouched and still normalises like any other.
+    def apply(transform, body, width, height)
+      return body if transform.empty? || transform.values.none? { _1 == true || _1.to_i.positive? }
+
+      w = (width || 24).to_f
+      h = (height || 24).to_f
+      ops = []
+      ops << "rotate(#{transform[:rotate] * 90} #{w / 2} #{h / 2})" if transform[:rotate].to_i.positive?
+      ops << "translate(#{w} 0) scale(-1 1)" if transform[:h_flip]
+      ops << "translate(0 #{h}) scale(1 -1)" if transform[:v_flip]
+
+      %(<g transform="#{ops.join(" ")}">#{body}</g>)
     end
   end
 end

@@ -17,6 +17,7 @@ module Fontico
       # Glyphs store no colour, so multicolour icons cannot be represented at
       # all. They stay in the sprite and the build names each one it dropped.
       def accepts?(icon) = !(@lock&.multicolor?(icon.name) || icon.multicolor?)
+      def rules_only? = false
 
       def call
         unsupported = @build.select { |icon, body| @outliner.strategy_for(icon, body) == :none }

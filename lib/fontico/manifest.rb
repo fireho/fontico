@@ -8,6 +8,9 @@ module Fontico
   class Manifest
     class Error < Fontico::Error; end
 
+    # Where local/ SVGs live when the manifest doesn't say otherwise.
+    LOCAL_PATH = "app/assets/icons"
+
     attr_reader :path, :defaults, :providers, :targets, :icons
 
     def self.load(path) = new(YAML.safe_load_file(path), path: path)
@@ -22,7 +25,7 @@ module Fontico
     end
 
     def default_provider = defaults.fetch("provider", "lucide")
-    def local_path       = providers.dig("local", "path") || "app/assets/icons"
+    def local_path       = providers.dig("local", "path") || LOCAL_PATH
     def size             = defaults.fetch("size", 24).to_i
 
     def [](name) = icons.find { _1.name == name }
