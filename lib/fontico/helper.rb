@@ -10,6 +10,7 @@ module Fontico
     # it on the baseline. Pass size: to override, or a CSS class — classes win
     # over the attributes, so `class: "size-6"` works untouched.
     def icon(name, size: nil, variant: nil, **options)
+      Fontico.check!(name.to_s)
       entry = Fontico.manifest[name.to_s]
       return missing(name) if entry.nil?
 
@@ -44,6 +45,7 @@ module Fontico
     # icons_sprite for the inline case, where the path half is empty and the
     # fragment resolves against the current document.
     def icon_href(name)
+      Fontico.check!(name.to_s)
       entry = Fontico.manifest[name.to_s]
       raise Fontico::Error, "no icon named #{name.inspect} in #{Fontico.manifest_path}" if entry.nil?
 
@@ -53,6 +55,7 @@ module Fontico
     # Embeds the symbol definitions directly, for pages served from a CDN
     # where a cross-origin <use href> would silently render nothing.
     def icons_sprite
+      Fontico.check!
       svg = File.read(Fontico.sprite_file)
       svg.respond_to?(:html_safe) ? svg.html_safe : svg
     end

@@ -53,6 +53,20 @@ it. **`icons.lock` is the thing you commit**: it holds every normalised body,
 so a deploy rebuilds the sprite from it in milliseconds with no network access
 and no Node.
 
+In development you rarely type either one. Saving `icons.yml` — or a local
+SVG — rebuilds the artifacts and drops the cached manifest, so the icon is live
+on the next request: no rake, no restart. A save that only reshuffles known
+icons costs a couple of milliseconds; a brand-new one pays its provider fetch
+once, then it is in the lock.
+
+A rebuild never raises — building stays as forgiving as the rake task, so a
+half-typed manifest does not take down a page that draws none of the broken
+icons. The pages that *do* draw them raise instead, at the call site, and keep
+raising until a save fixes it. That is deliberate: an icon left out of the
+sprite still resolves through the manifest and renders a valid `<use>` at a
+symbol that isn't there, which in a browser is an invisible empty box on a page
+that returns 200. Silence is the one outcome worse than a stack trace.
+
 An icon that cannot be resolved — a typo'd slug, a local file that isn't
 there — is named in red and left out; the rest of the manifest still builds.
 It keeps its codepoint reserved, so fixing the entry and rebuilding brings it

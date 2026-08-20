@@ -600,3 +600,112 @@ class StylesheetTest < Minitest::Test
     refute emitter.accepts?(manifest.icons.first)
   end
 end
+
+# What the dev reloader exists to undo: the module memoizes the manifest, so
+# an edited icons.yml stays invisible to a running process until reset!.
+class ManifestMemoTest < Minitest::Test
+  def setup
+    @dir  = Dir.mktmpdir
+    @path = File.join(@dir, "icons.yml")
+    write("save" => "lucide/save")
+    Fontico.manifest_path = @path
+    Fontico.reset!
+  end
+
+  def teardown
+    Fontico.manifest_path = nil
+    Fontico.reset!
+    FileUtils.remove_entry(@dir)
+  end
+
+  def write(icons)
+    File.write(@path, YAML.dump("providers" => { "lucide" => {} }, "icons" => icons))
+  end
+
+  def test_an_edited_manifest_is_invisible_until_reset
+    assert Fontico.manifest["save"]
+
+    write("save" => "lucide/save", "trash" => "lucide/trash-2")
+    assert_nil Fontico.manifest["trash"], "memo should still hold the old manifest"
+
+    Fontico.reset!
+    assert Fontico.manifest["trash"], "reset! should re-read icons.yml"
+  end
+
+  def test_local_path_falls_back_to_the_documented_default
+    assert_equal "app/assets/icons", Fontico.manifest.local_path
+    assert_equal Fontico::Manifest::LOCAL_PATH, Fontico.manifest.local_path
+  end
+end
+
+# Building is forgiving; drawing is not. An icon the build left out still has
+# a manifest entry, so the helper would happily render a <use> at a symbol
+# that isn't there — an invisible box on a page that 200s.
+class RuntimeFailureTest < Minitest::Test
+  class View; include Fontico::Helper; end
+
+  def setup
+    @dir = Dir.mktmpdir
+    FileUtils.mkdir_p(File.join(@dir, "icons"))
+    File.write(File.join(@dir, "icons", "here.svg"), "<svg viewBox='0 0 24 24'><path d='M0 0'/></svg>")
+    Fontico.root = @dir
+    Fontico.output_dir = "builds"
+    write("local" => { "path" => "icons" })
+    @view = View.new
+  end
+
+  def teardown
+    Fontico.root = Fontico.output_dir = Fontico.manifest_path = nil
+    Fontico.reset!
+    FileUtils.remove_entry(@dir)
+  end
+
+  # here.svg exists, gone.svg never did.
+  def write(providers)
+    File.write(File.join(@dir, "icons.yml"), YAML.dump(
+                 "targets" => ["sprite"], "providers" => providers,
+                 "icons" => { "here" => "local/here", "gone" => "local/gone" }
+               ))
+    Fontico.reset!
+  end
+
+  def test_an_icon_left_out_of_the_sprite_raises_where_it_is_drawn
+    Fontico.rebuild!
+
+    assert_equal ["gone"], Fontico.missing_icons.keys
+    assert_nil Fontico.check!("here"), "a built icon must not raise"
+
+    err = assert_raises(Fontico::Error) { @view.icon("gone") }
+    assert_match(/left out of the sprite/, err.message)
+    assert_match(/no such file/, err.message, "say why, not just that")
+  end
+
+  # The other 199 icons keep working — that is the whole reason the build
+  # itself does not raise.
+  def test_the_icons_that_did_build_still_draw
+    Fontico.rebuild!
+    assert_includes @view.icon("here"), "#here"
+  end
+
+  def test_a_build_that_died_outright_is_raised_at_the_next_icon
+    write("bogus" => {}) # every icon now names an undeclared provider
+    Fontico.rebuild!
+
+    refute_nil Fontico.build_error
+    err = assert_raises(Fontico::Error) { @view.icon("here") }
+    assert_match(/did not build/, err.message)
+    assert_match(/undeclared providers: local/, err.message)
+  end
+
+  def test_the_save_that_fixes_it_clears_the_complaint
+    write("bogus" => {})
+    Fontico.rebuild!
+    refute_nil Fontico.build_error
+
+    write("local" => { "path" => "icons" })
+    Fontico.rebuild!
+
+    assert_nil Fontico.build_error
+    assert_includes @view.icon("here"), "#here"
+  end
+end

@@ -44,6 +44,38 @@ module Fontico
 
     def build(**opts) = Builder.new(manifest, root: root, output: output_dir, **opts).call
 
+    # The dev reloader's build, and the only caller that records what went
+    # wrong. Building stays forgiving on purpose — one typo must not stop the
+    # other 199 icons — so nothing raises here; the complaint is held until
+    # someone actually draws an icon. See #check!.
+    def rebuild!
+      @build_error = nil
+      @missing_icons = build.missing || {}
+    rescue StandardError => e
+      @build_error = e
+      @missing_icons = {}
+    end
+
+    # Why the last rebuild could not deliver: the exception it died on, and
+    # the icons it left out of the sprite.
+    attr_reader :build_error
+
+    def missing_icons = @missing_icons ||= {}
+
+    # Raised at the call site, because that is the only place with anything
+    # useful to say. An icon left out of the sprite still resolves through the
+    # manifest and renders a perfectly valid <use> at a symbol that isn't
+    # there — an invisible empty box, on a page that 200s. Silence is the one
+    # outcome worse than a stack trace.
+    #
+    # Free in production: only the dev reloader ever fills these in.
+    def check!(name = nil)
+      raise Error, "icons.yml did not build: #{@build_error.message}" if @build_error
+
+      reason = missing_icons[name]
+      raise Error, "icon #{name.inspect} was left out of the sprite: #{reason}" if reason
+    end
+
     def lockfile = Lockfile.new(File.join(root, "icons.lock"))
 
     def font_file = File.join(root, output_dir, "icons.ttf")
@@ -59,7 +91,7 @@ module Fontico
     end
 
     def glyph(name) = [codepoint(name)].pack("U")
-    def reset!        = (@manifest = nil)
+    def reset!        = (@manifest = @build_error = @missing_icons = nil)
 
     def configure = yield(self)
   end
