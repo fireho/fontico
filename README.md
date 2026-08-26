@@ -34,6 +34,7 @@ icons:
     menu:    lucide/menu     # -> icon("nav.menu")
 ```
 
+Like pokemon, you gotta catch 'em all.
 Any of [Iconify's 200k+ icons](https://icon-sets.iconify.design/) work as a
 provider prefix. Your own SVGs go in `app/assets/icons/`, filename as slug.
 
@@ -95,7 +96,7 @@ First-party exports are not uniform the way vendor icons are, so everything
 entering `app/assets/icons/` is normalised first:
 
 | | |
-|---|---|
+| --- | --- |
 | Editor chrome | `sodipodi:`, `inkscape:`, `<metadata>`, RDF, empty `<defs>` stripped |
 | Ids | rewritten to `slug__id`, with `url(#…)`, `href`, `clip-path`, `mask` following |
 | viewBox | any source box refitted into the target, centred, aspect preserved |
@@ -184,7 +185,7 @@ A font glyph is filled contours; it has no strokes and no colour. Each icon
 takes one of three routes:
 
 | | |
-|---|---|
+| --- | --- |
 | **filled** | used as-is — Material Symbols, most Iconify sets, flat first-party exports |
 | **extracted** | stroke-based, but the provider ships a font whose glyphs are already expanded — lifted from there, losslessly (Lucide) |
 | **refused** | stroke-based with no provider font — the build stops and names the icon |
