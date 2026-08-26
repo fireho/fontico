@@ -271,6 +271,22 @@ class PreprocessorTest < Minitest::Test
     assert_match(/scale\(0\.0886\)/, body)
   end
 
+  # Iconify sends inner markup plus the set's dimensions out of band. Those
+  # dimensions are the only record of the grid, so a fragment that ignores
+  # them ships cropped: arcticons draws on 48, game-icons on 512.
+  def test_fragment_is_refitted_from_its_supplied_dimensions
+    frag = %(<path d="M24 46.28c-5.36 0-21.5-3.66-21.5-22.3"/>)
+    assert_match(/scale\(0\.5\)/, Fontico::Preprocessor.new(icon).call(frag, width: 48, height: 48).body)
+    # 24 / 512 == 0.046875
+    assert_match(/scale\(0\.0469\)/, Fontico::Preprocessor.new(icon).call(frag, width: 512, height: 512).body)
+  end
+
+  def test_fragment_on_the_target_grid_needs_no_transform
+    frag = %(<path d="M0 0h1v1H0Z"/>)
+    refute_includes Fontico::Preprocessor.new(icon).call(frag, width: 24, height: 24).body, "transform="
+    refute_includes Fontico::Preprocessor.new(icon).call(frag).body, "transform="
+  end
+
   def test_no_transform_when_source_is_already_the_target_box
     svg = %(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1H0Z"/></svg>)
     refute_includes run_on(svg).body, "transform="

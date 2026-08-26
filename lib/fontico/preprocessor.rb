@@ -38,7 +38,7 @@ module Fontico
     # +source+ is a whole SVG document (local files) or a body fragment
     # (Iconify, which returns inner markup only).
     def call(source, width: nil, height: nil)
-      doc = REXML::Document.new(wrap(source))
+      doc = REXML::Document.new(wrap(source, width, height))
       root = doc.root
 
       vb_w, vb_h, min_x, min_y = viewbox_of(root, width, height)
@@ -62,10 +62,17 @@ module Fontico
 
     private
 
-    def wrap(source)
+    # A fragment carries no viewBox, so the dimensions supplied out of band
+    # are the only record of the grid it was drawn on and have to go on the
+    # wrapper. Assuming @size here silently cropped every provider that is
+    # not 24: arcticons (48) shipped as its own top-left quarter, game-icons
+    # (512) as a near-empty corner. lucide is 24, which is why it never showed.
+    def wrap(source, width = nil, height = nil)
       return source if source.lstrip.start_with?("<svg", "<?xml", "<!DOCTYPE")
 
-      %(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 #{@size} #{@size}">#{source}</svg>)
+      w = width.to_f.positive? ? width : @size
+      h = height.to_f.positive? ? height : @size
+      %(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 #{w} #{h}">#{source}</svg>)
     end
 
     # Inkscape writes width="1024" alongside viewBox="0 0 270.93 270.93"; the
