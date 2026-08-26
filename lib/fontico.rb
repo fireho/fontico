@@ -14,7 +14,7 @@ module Fontico
   autoload :Builder,      "fontico/builder"
   autoload :Helper,       "fontico/helper"
   autoload :NodeRunner,   "fontico/node_runner"
-  autoload :ProviderFonts,"fontico/provider_fonts"
+  autoload :ProviderFonts, "fontico/provider_fonts"
   autoload :Outliner,     "fontico/outliner"
   # fontico/prawn is opt-in: `require "fontico/prawn"`, so the gem never
   # loads Prawn for apps that only build a sprite.
