@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    fontico (0.1.0)
+    fontico (0.1.1)
       rexml (~> 3.2)
 
 GEM
