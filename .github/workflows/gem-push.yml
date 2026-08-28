@@ -63,6 +63,7 @@ jobs:
       # build and push by hand rather than through `rake release` keeps the
       # job to the one thing a tag build should do: the tag already exists,
       # so there is nothing here to commit, tag or git-push.
-      - uses: rubygems/configure-rubygems-credentials@v1
+      # No floating major ref exists on this action — pin the release.
+      - uses: rubygems/configure-rubygems-credentials@v2.1.0
       - run: gem build fontico.gemspec
       - run: gem push fontico-*.gem
