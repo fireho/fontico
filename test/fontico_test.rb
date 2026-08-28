@@ -3,6 +3,10 @@
 require "minitest/autorun"
 require "tmpdir"
 require "fileutils"
+# The suite writes manifests directly. Fontico::Manifest is autoloaded, so it
+# is the thing that pulls in yaml — and only once some test touches it. Under
+# a random order that is not guaranteed, so ask for it here.
+require "yaml"
 require "fontico"
 
 class ManifestTest < Minitest::Test
