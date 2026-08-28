@@ -1,9 +1,9 @@
 name: Ruby Gem
 
 # One release path: push a v* tag, CI has to go green, then the gem ships.
-# No API key is involved — rubygems/release-gem trades this job's OIDC token
-# for a short-lived RubyGems key, which is also the only way to push a gem
-# whose gemspec sets rubygems_mfa_required.
+# No API key is involved — the publish job trades its OIDC token for a
+# short-lived RubyGems key, which is also the only way to push a gem whose
+# gemspec sets rubygems_mfa_required.
 on:
   push:
     tags: ["v*"]
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write   # rake release pushes the tag
+      contents: read    # nothing is written back: the tag is already here
       id-token: write   # mandatory: without it the OIDC exchange cannot happen
 
     # Must match the environment named in the trusted publisher on rubygems.org.
@@ -55,10 +55,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.4"
           bundler-cache: true
-      - uses: rubygems/release-gem@v1
+      # Trades the job's OIDC token for a short-lived RubyGems key. Doing the
+      # build and push by hand rather than through `rake release` keeps the
+      # job to the one thing a tag build should do: the tag already exists,
+      # so there is nothing here to commit, tag or git-push.
+      - uses: rubygems/configure-rubygems-credentials@v1
+      - run: gem build fontico.gemspec
+      - run: gem push fontico-*.gem
