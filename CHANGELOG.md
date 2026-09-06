@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Editing a local SVG now rebuilds its sprite body. The lockfile still caches
+  Iconify responses; first-party files are re-read from disk on every build.
+- `rake fontico:update` re-fetches bodies without deleting `icons.lock`, so
+  append-only codepoints are not reassigned in manifest order.
+- `Fontico.codepoint` / `Fontico.glyph` raise on an unknown name instead of
+  allocating a private-use codepoint that maps to nothing. The `ttf` emitter
+  refuses the same way: a nil codepoint used to cross into the toolchain as
+  JSON `null`, and `String.fromCodePoint(null)` is `"\u0000"` — no error, just
+  a glyph silently mapped to NUL.
+- Deleting a local SVG now drops the icon and names it in red. The lock used
+  to count it as fresh, so the sprite kept rendering the last-known body
+  indefinitely. Its codepoint is still retained.
+
+### Changed
+
+- `--offline` no longer blames `icons.lock` when `force` is what made a body
+  stale, and no longer fails a manifest of nothing but local files.
+- An untouched local SVG counts as cached rather than fetched. It is re-read
+  every build, so being stale is not evidence that anything changed.
+
 ## [0.1.2]
 
 ### Fixed

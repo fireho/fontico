@@ -1,6 +1,20 @@
-# fontico
+<div align="center">
 
-Name icons by intent. Source them from anywhere. Ship one artifact.
+```
+╔═╗╔═╗╔╗╔╔╦╗╦╔═╗╔═╗
+╠╣ ║ ║║║║ ║ ║║  ║ ║
+╚  ╚═╝╝╚╝ ╩ ╩╚═╝╚═╝
+```
+
+**Name icons by intent. Source them from anywhere. Ship one artifact.**
+
+[![Gem](https://img.shields.io/gem/v/fontico)](https://rubygems.org/gems/fontico)
+[![CI](https://github.com/fireho/fontico/actions/workflows/ci.yml/badge.svg)](https://github.com/fireho/fontico/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE.txt)
+
+</div>
+
+---
 
 ```erb
 <%= icon "save" %>      <%# Lucide            %>
@@ -10,6 +24,30 @@ Name icons by intent. Source them from anywhere. Ship one artifact.
 
 Three providers, one call. Templates never name a vendor, so re-skinning the
 app — or surviving an upstream rename — is a diff in one file.
+
+| | |
+| --- | --- |
+| **353,000 icons** | any of [Iconify's 238 sets](https://icon-sets.iconify.design/), plus your own folder |
+| **One request** | a single sprite, 2.3KB brotli, not render-blocking |
+| **361ms cold, 2ms warm** | measured on 35 icons across two remote providers and five local files |
+| **No Node, no npm** | the sprite target is pure Ruby; deploys rebuild offline from the lockfile |
+| **Also PDFs** | a real TTF for Prawn, with pinned codepoints |
+
+## Install
+
+```ruby
+# Gemfile
+gem "fontico"
+```
+
+```bash
+bundle install
+$EDITOR icons.yml     # the manifest, below
+rake fontico:build
+```
+
+No JS bundle, no `package.json`, no importmap pin. Artifacts land in
+`app/assets/builds/`, which Propshaft already serves.
 
 ## The manifest
 
@@ -35,26 +73,19 @@ icons:
 ```
 
 Like pokemon, you gotta catch 'em all.
-Any of [Iconify's 200k+ icons](https://icon-sets.iconify.design/) work as a
-provider prefix. Your own SVGs go in `app/assets/icons/`, filename as slug.
+Any of [Iconify's sets](https://icon-sets.iconify.design/) work as a provider
+prefix. Your own SVGs go in `app/assets/icons/`, filename as slug.
 
 ## Build
 
 ```bash
 rake fontico:build     # resolve, normalise, emit
-rake fontico:update    # re-fetch, ignoring icons.lock
+rake fontico:update    # re-fetch bodies; codepoints stay pinned
 ```
 
-Artifacts land in `app/assets/builds/`, which Propshaft serves automatically —
-no manifest, no precompile list. `rake assets:precompile` is hooked, so deploys
-need no extra step.
+`rake assets:precompile` is hooked, so deploys need no extra step.
 
-That directory is gitignored in a stock Rails app, so nothing is committed from
-it. **`icons.lock` is the thing you commit**: it holds every normalised body,
-so a deploy rebuilds the sprite from it in milliseconds with no network access
-and no Node.
-
-In development you rarely type either one. Saving `icons.yml` — or a local
+**In development you rarely type either one.** Saving `icons.yml` — or a local
 SVG — rebuilds the artifacts and drops the cached manifest, so the icon is live
 on the next request: no rake, no restart. A save that only reshuffles known
 icons costs a couple of milliseconds; a brand-new one pays its provider fetch
@@ -73,13 +104,14 @@ there — is named in red and left out; the rest of the manifest still builds.
 It keeps its codepoint reserved, so fixing the entry and rebuilding brings it
 back with the same glyph. A provider that is unreachable is still fatal.
 
-Measured on 35 icons across two remote providers and five local files:
-**361ms cold, 2ms warm.** Vendor icons are fetched in one batched request per
-provider — not one per icon.
+Vendor icons are fetched in one batched request per provider — not one per
+icon.
 
 ## Why there is a lockfile
 
-`icons.lock` pins two things that must not drift:
+`app/assets/builds/` is gitignored in a stock Rails app, so nothing is
+committed from it. **`icons.lock` is the thing you commit.** It pins two things
+that must not drift:
 
 - **Codepoints**, append-only. Adding an icon must not renumber the others, or
   every glyph in a built font moves and the committed artifact churns
@@ -88,7 +120,8 @@ provider — not one per icon.
   Iconify API serves *latest*; without this an icon can silently change shape
   between two builds of the same manifest.
 
-Commit it.
+A deploy rebuilds the sprite from it in milliseconds, with no network access
+and no Node. Commit it.
 
 ## What happens to your SVGs
 
@@ -204,12 +237,27 @@ build names each one it dropped.
 Font targets need Node, installed on demand into `~/.cache/fontico`. A manifest
 with `targets: [sprite]` never touches it and stays pure Ruby.
 
+## How it compares
+
+| | vendor gems (`lucide-rails`, `heroicon`) | `iconify-icon` web component | fontico |
+| --- | --- | --- | --- |
+| Icon sets | one, per gem | 238 | 238, plus your own folder |
+| Where the SVG comes from | inlined per render | fetched at runtime, per client | one build-time sprite |
+| Requests | 0, but repeated in every response body | 1+ per icon, per visitor | 1, cached |
+| JS required | no | yes | no |
+| Rename-proof templates | no — `lucide_icon "pencil"` | no — `icon="lucide:pencil"` | yes — `icon "edit"` |
+| Offline / reproducible build | yes | no | yes, via `icons.lock` |
+| PDF | no | no | yes, TTF for Prawn |
+
 ## Status
 
 - ✅ Manifest, resolver, preprocessor, lockfile, sprite emitter, Rails helper
 - ✅ TTF emitter with glyph extraction, codepoint API, Prawn helpers
 - ⏳ `woff2` — declared targets are skipped with a notice
+- ⏳ `variant:` — accepted and ignored by the helper; see [TODO.md](TODO.md)
 
 ## License
 
-MIT
+MIT.
+Icons keep their upstream licenses:
+`icons.lock` records what you declared and shipped.

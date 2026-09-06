@@ -26,9 +26,16 @@ module Fontico
         outlines = @outliner.outlines(@build, size: @manifest.size)
 
         glyphs = @build.map do |icon, body|
-          { name: icon.key,
-            codepoint: @lock.codepoint_for(icon.name),
-            svg: document(outlines[icon.name], body) }
+          # Never fall back to allocating here. The builder has already
+          # save!d the lock by the time it emits, so a codepoint minted now
+          # would never reach disk: the font would ship a glyph that
+          # Fontico.glyph cannot name. A nil is worse still — it reaches
+          # String.fromCodePoint as null and maps the glyph to U+0000
+          # without complaint.
+          cp = @lock.codepoint_for(icon.name)
+          raise Fontico::Error, "#{icon.name} has no codepoint in icons.lock" if cp.nil?
+
+          { name: icon.key, codepoint: cp, svg: document(outlines[icon.name], body) }
         end
 
         result = @outliner.instance_variable_get(:@runner)

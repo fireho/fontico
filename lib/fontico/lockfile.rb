@@ -29,7 +29,13 @@ module Fontico
       @entries    = data["icons"]      || {}
     end
 
-    def codepoint_for(name)
+    # Lookup only. A missing name is nil — callers that draw a glyph must
+    # not invent a codepoint, or a typo silently becomes a .notdef.
+    def codepoint_for(name) = @codepoints[name]
+
+    # Append-only reservation. store is the production caller; tests use it
+    # to pin order without going through a full build.
+    def allocate(name)
       @codepoints[name] ||= next_free
     end
 
@@ -43,7 +49,7 @@ module Fontico
         "warnings"   => warnings,
         "body"       => body
       }
-      codepoint_for(name)
+      allocate(name)
     end
 
     # Names present in the lock but absent from the manifest keep their

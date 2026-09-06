@@ -215,6 +215,182 @@ class BuilderMissingTest < Minitest::Test
       assert_empty after["retired"]
     end
   end
+
+  # The lock caches Iconify; a local file is already on disk. Editing it
+  # must re-preprocess, or the advertised save-and-refresh loop is a lie.
+  def test_editing_a_local_svg_rebuilds_the_body
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, "icons"))
+      File.write(File.join(root, "icons", "logo.svg"),
+                 "<svg viewBox='0 0 24 24'><path d='M0 0'/></svg>")
+
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"],
+          "providers" => { "local" => { "path" => "icons" } },
+          "icons" => { "logo" => "local/logo" } }
+      )
+      Fontico::Builder.new(m, root: root, output: "builds").call
+      refute_includes File.read(File.join(root, "builds", "icons.svg")), "M9 9"
+
+      File.write(File.join(root, "icons", "logo.svg"),
+                 "<svg viewBox='0 0 24 24'><path d='M9 9'/></svg>")
+      Fontico::Builder.new(m, root: root, output: "builds").call
+      assert_includes File.read(File.join(root, "builds", "icons.svg")), "M9 9"
+    end
+  end
+
+  def test_a_cached_remote_builds_offline
+    Dir.mktmpdir do |root|
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"],
+          "providers" => { "lucide" => {} },
+          "icons" => { "save" => "lucide/save" } }
+      )
+      lock = Fontico::Lockfile.new(File.join(root, "icons.lock"))
+      lock.store("save", source: "lucide/save", body: "<path d='M1 1'/>")
+      lock.save!
+
+      report = Fontico::Builder.new(m, root: root, output: "builds", offline: true).call
+      assert_equal ["save"], report.cached
+      assert_empty report.fetched
+      assert_includes File.read(File.join(root, "builds", "icons.svg")), "M1 1"
+    end
+  end
+
+  # `rake fontico:update` used to delete the lock, which reassigned every
+  # codepoint in manifest order. Force re-fetches bodies and leaves them.
+  #
+  # It takes two icons and a reordered manifest to see this: with one icon
+  # the codepoints come out identical either way, so a single-icon version of
+  # this test passes against the very bug it names.
+  def test_force_keeps_codepoints_when_the_manifest_is_reordered
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, "icons"))
+      %w[alpha beta].each do |name|
+        File.write(File.join(root, "icons", "#{name}.svg"),
+                   "<svg viewBox='0 0 24 24'><path d='M0 0'/></svg>")
+      end
+      base = { "targets" => ["sprite"], "providers" => { "local" => { "path" => "icons" } } }
+      ab = Fontico::Manifest.new(base.merge("icons" => { "alpha" => "local/alpha", "beta" => "local/beta" }))
+      ba = Fontico::Manifest.new(base.merge("icons" => { "beta" => "local/beta", "alpha" => "local/alpha" }))
+
+      Fontico::Builder.new(ab, root: root, output: "builds").call
+      before = YAML.safe_load_file(File.join(root, "icons.lock"))["codepoints"]
+      assert_equal({ "alpha" => 0xE001, "beta" => 0xE002 }, before)
+
+      Fontico::Builder.new(ba, root: root, output: "builds", force: true).call
+      after = YAML.safe_load_file(File.join(root, "icons.lock"))["codepoints"]
+
+      # Deleting the lock and rebuilding in manifest order swaps these.
+      assert_equal before, after
+    end
+  end
+
+  # The counters answer "did this come off the wire". A local file is re-read
+  # on every build, so being stale is not evidence that anything changed.
+  def test_an_untouched_local_counts_as_cached_not_fetched
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, "icons"))
+      path = File.join(root, "icons", "logo.svg")
+      File.write(path, "<svg viewBox='0 0 24 24'><path d='M0 0'/></svg>")
+
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"],
+          "providers" => { "local" => { "path" => "icons" } },
+          "icons" => { "logo" => "local/logo" } }
+      )
+      first = Fontico::Builder.new(m, root: root, output: "builds").call
+      assert_equal ["logo"], first.fetched, "a brand-new icon is a fetch"
+
+      second = Fontico::Builder.new(m, root: root, output: "builds").call
+      assert_equal ["logo"], second.cached
+      assert_empty second.fetched
+
+      File.write(path, "<svg viewBox='0 0 24 24'><path d='M9 9'/></svg>")
+      third = Fontico::Builder.new(m, root: root, output: "builds").call
+      assert_equal ["logo"], third.fetched
+      assert_empty third.cached
+    end
+  end
+
+  def test_force_treats_a_cached_remote_as_stale
+    Dir.mktmpdir do |root|
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"],
+          "providers" => { "lucide" => {} },
+          "icons" => { "save" => "lucide/save" } }
+      )
+      lock = Fontico::Lockfile.new(File.join(root, "icons.lock"))
+      lock.store("save", source: "lucide/save", body: "<path d='M1 1'/>")
+      lock.save!
+
+      err = assert_raises(Fontico::Error) do
+        Fontico::Builder.new(m, root: root, output: "builds", offline: true, force: true).call
+      end
+      # The lock is not missing anything here; force is what made it stale.
+      assert_match(/cannot re-fetch 1 icon\(s\) and --offline was given/, err.message)
+      refute_match(/missing/, err.message)
+    end
+  end
+
+  def test_offline_names_the_lock_when_a_body_really_is_absent
+    Dir.mktmpdir do |root|
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"],
+          "providers" => { "lucide" => {} },
+          "icons" => { "save" => "lucide/save" } }
+      )
+      err = assert_raises(Fontico::Error) do
+        Fontico::Builder.new(m, root: root, output: "builds", offline: true).call
+      end
+      assert_match(/missing from icons.lock/, err.message)
+    end
+  end
+
+  # Offline is about the network. A manifest of nothing but local files has
+  # no wire to be cut off from.
+  def test_a_local_only_manifest_builds_offline
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, "icons"))
+      File.write(File.join(root, "icons", "logo.svg"),
+                 "<svg viewBox='0 0 24 24'><path d='M9 9'/></svg>")
+
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"],
+          "providers" => { "local" => { "path" => "icons" } },
+          "icons" => { "logo" => "local/logo" } }
+      )
+      Fontico::Builder.new(m, root: root, output: "builds", offline: true).call
+      assert_includes File.read(File.join(root, "builds", "icons.svg")), "M9 9"
+    end
+  end
+end
+
+class CodepointApiTest < Minitest::Test
+  def setup
+    @dir = Dir.mktmpdir
+    Fontico.root = @dir
+    lock = Fontico.lockfile
+    lock.store("save", source: "lucide/save", body: "<path/>")
+    lock.save!
+  end
+
+  def teardown
+    Fontico.root = nil
+    Fontico.reset!
+    FileUtils.remove_entry(@dir)
+  end
+
+  def test_known_name_returns_the_pinned_codepoint
+    assert_equal 0xE001, Fontico.codepoint("save")
+    assert_equal [0xE001].pack("U"), Fontico.glyph("save")
+  end
+
+  def test_unknown_name_raises_instead_of_inventing_a_codepoint
+    err = assert_raises(Fontico::Error) { Fontico.codepoint("nope") }
+    assert_match(/no icon named "nope"/, err.message)
+    assert_nil Fontico.lockfile.codepoint_for("nope"), "the raise must not have allocated"
+  end
 end
 
 class PreprocessorTest < Minitest::Test
@@ -340,18 +516,29 @@ class LockfileTest < Minitest::Test
   end
 
   def test_codepoints_start_in_the_private_use_area
-    with_lock { |lock, _| assert_equal 0xE001, lock.codepoint_for("save") }
+    with_lock { |lock, _| assert_equal 0xE001, lock.allocate("save") }
+  end
+
+  # Lookup must not invent a codepoint. Fontico.codepoint / Prawn would
+  # otherwise draw a private-use character that maps to nothing.
+  def test_codepoint_for_does_not_allocate
+    with_lock do |lock, _|
+      assert_nil lock.codepoint_for("save")
+      lock.allocate("save")
+      assert_equal 0xE001, lock.codepoint_for("save")
+      assert_nil lock.codepoint_for("other")
+    end
   end
 
   # The reason the lockfile exists: adding an icon must not renumber the rest,
   # or every glyph in a committed font moves on each addition.
   def test_adding_an_icon_does_not_renumber_existing_ones
     with_lock do |lock, dir|
-      before = %w[save edit copy].to_h { [_1, lock.codepoint_for(_1)] }
+      before = %w[save edit copy].to_h { [_1, lock.allocate(_1)] }
       lock.save!
 
       reopened = Fontico::Lockfile.new(File.join(dir, "icons.lock"))
-      reopened.codepoint_for("aaaa-sorts-first")
+      reopened.allocate("aaaa-sorts-first")
       after = before.keys.to_h { [_1, reopened.codepoint_for(_1)] }
 
       assert_equal before, after
@@ -360,10 +547,11 @@ class LockfileTest < Minitest::Test
 
   def test_removed_icons_retire_their_codepoint_instead_of_freeing_it
     with_lock do |lock, _|
-      gone = lock.codepoint_for("old")
-      lock.codepoint_for("kept")
+      gone = lock.allocate("old")
+      lock.allocate("kept")
       lock.retire_missing!(["kept"])
-      refute_equal gone, lock.codepoint_for("brand-new")
+      refute_equal gone, lock.allocate("brand-new")
+      assert_nil lock.codepoint_for("old")
     end
   end
 
@@ -505,6 +693,47 @@ class FontEmitterTest < Minitest::Test
     emitter = Fontico::Emitters::Sprite.new(manifest, [])
     color = Fontico::Icon.new(name: "logo", provider: "local", slug: "logo", multicolor: true)
     assert emitter.accepts?(color)
+  end
+
+  # A nil codepoint is not caught downstream: it crosses into build_font.mjs
+  # as JSON null, and String.fromCodePoint(null) is "\u0000" — no error, just
+  # a glyph mapped to NUL. Refuse before the toolchain ever starts. Filled
+  # geometry keeps this off the :glyph path, so the test needs no Node.
+  def test_an_icon_with_no_codepoint_refuses_to_emit
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "icons.lock")
+      File.write(path, { "format" => 1, "codepoints" => {}, "retired" => {},
+                         "icons" => { "save" => { "body" => "<path d='M1 1' fill='currentColor'/>" } } }.to_yaml)
+      lock = Fontico::Lockfile.new(path)
+      assert_nil lock.codepoint_for("save"), "the fixture must reproduce the gap"
+
+      icon = Fontico::Icon.new(name: "save", provider: "lucide", slug: "save")
+      pairs = [[icon, lock.body("save")]]
+
+      err = assert_raises(Fontico::Error) do
+        Fontico::Emitters::Font.new(manifest, pairs, lock: lock, output: File.join(dir, "icons.ttf")).call
+      end
+      assert_match(/save has no codepoint in icons.lock/, err.message)
+      refute_path_exists File.join(dir, "icons.ttf")
+    end
+  end
+
+  # Emitting must never mint one either: the builder has already save!d the
+  # lock by then, so the font would carry a codepoint nothing on disk records.
+  def test_refusing_does_not_allocate_behind_the_build
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "icons.lock")
+      File.write(path, { "format" => 1, "codepoints" => {}, "retired" => {},
+                         "icons" => { "save" => { "body" => "<path d='M1 1' fill='currentColor'/>" } } }.to_yaml)
+      lock = Fontico::Lockfile.new(path)
+      icon = Fontico::Icon.new(name: "save", provider: "lucide", slug: "save")
+
+      assert_raises(Fontico::Error) do
+        Fontico::Emitters::Font.new(manifest, [[icon, lock.body("save")]],
+                                    lock: lock, output: File.join(dir, "icons.ttf")).call
+      end
+      assert_nil lock.codepoint_for("save")
+    end
   end
 end
 

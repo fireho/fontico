@@ -12,11 +12,13 @@ module Fontico
     Report = Struct.new(:written, :warnings, :skipped, :cached, :fetched, :pending,
                         :missing, keyword_init: true)
 
-    def initialize(manifest, root: Dir.pwd, output: "app/assets/builds", offline: false)
+    def initialize(manifest, root: Dir.pwd, output: "app/assets/builds",
+                   offline: false, force: false)
       @manifest = manifest
       @root = root
       @output = File.join(root, output)
       @offline = offline
+      @force = force
       @lock = Lockfile.new(File.join(root, "icons.lock"))
     end
 
@@ -25,11 +27,23 @@ module Fontico
       cached, fetched = [], []
       missing = {}
 
-      stale = @manifest.icons.reject { @lock.fresh?(_1.name, _1.source) }
+      # The lock caches Iconify bodies so deploys run offline. Local files
+      # are already on disk: treating them as fresh meant editing logo.svg
+      # rebuilt nothing. Force is `rake fontico:update` — re-fetch remotes,
+      # keep the append-only codepoints.
+      stale = @manifest.icons.select { _1.local? || @force || !@lock.fresh?(_1.name, _1.source) }
       cached = @manifest.icons.map(&:name) - stale.map(&:name)
 
       unless stale.empty?
-        raise Error, "icons.lock is missing #{stale.size} icon(s) and --offline was given" if @offline
+        remote_stale = stale.reject(&:local?)
+        # Local files do not need the network. Offline is a hard fail only
+        # when a remote body has to come off the wire — which under force is
+        # every remote, lock or no lock. Saying "missing" there would be a
+        # lie: the bodies are present, force is what made them stale.
+        if @offline && remote_stale.any?
+          reason = @force ? "re-fetch #{remote_stale.size} icon(s)" : "resolve #{remote_stale.size} icon(s) missing from icons.lock"
+          raise Error, "cannot #{reason} and --offline was given"
+        end
 
         resolver = Resolver.new(@manifest, root: @root)
         sources = resolver.call(only: stale.map(&:name))
@@ -43,9 +57,16 @@ module Fontico
 
           pre = Preprocessor.new(icon, size: @manifest.size)
                             .call(src.markup, width: src.width, height: src.height)
+          # Locals are re-read every build, so "stale" does not mean changed.
+          # Compare the stored digest to keep an untouched logo.svg counted as
+          # cached rather than reported as a fetch that never happened. A
+          # remote is judged by the wire, not the digest: under force it was
+          # genuinely re-fetched even when it came back byte-identical.
+          before = @lock.entry(icon.name)&.fetch("digest", nil)
           @lock.store(icon.name, source: icon.source, body: pre.body,
                       multicolor: pre.multicolor, warnings: pre.warnings)
-          fetched << icon.name
+          unchanged = icon.local? && @lock.entry(icon.name)["digest"] == before
+          (unchanged ? cached : fetched) << icon.name
         end
       end
 

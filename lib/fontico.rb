@@ -85,7 +85,7 @@ module Fontico
     # a reference in Ruby source never goes stale.
     def codepoint(name)
       cp = lockfile.codepoint_for(name.to_s)
-      raise Error, "no icon named #{name.inspect}; run rake fontico:build" if cp.nil?
+      raise Error, "no icon named #{name.inspect} in icons.lock" if cp.nil?
 
       cp
     end
