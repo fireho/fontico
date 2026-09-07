@@ -1,5 +1,10 @@
 # frozen_string_literal: true
 
+# Run me any way you like: `rake test`, or plain `ruby test/fontico_test.rb`.
+# Without this the bare `ruby` run resolves `fontico` to whatever version is
+# installed as a gem and fails in ways that have nothing to do with the repo.
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
 require "minitest/autorun"
 require "tmpdir"
 require "fileutils"
@@ -1018,5 +1023,80 @@ class ManifestMergeTest < Minitest::Test
     Fontico.load_path = [@app]
     assert Fontico.manifest["logo"]
     assert_nil Fontico.manifest["fire.painel"]
+  end
+end
+
+# A sprite can be structurally perfect and still draw 36 blank boxes. No
+# assertion catches that — only a pair of eyes — so this one builds the
+# fixture manifest for real and leaves a page behind, every icon grouped by
+# what this build did to it. Opt-in: it goes to Iconify.
+#
+#   FONTICO_HTML=1 ruby test/fontico_test.rb -n /preview/ && open tmp/preview/index.html
+class SpritePreviewTest < Minitest::Test
+  ROOT_DIR = File.expand_path("..", __dir__)
+  OUT      = "tmp/preview"
+
+  def test_preview_page_groups_every_icon_by_what_the_build_did
+    skip "set FONTICO_HTML=1 — this one fetches from Iconify" unless ENV["FONTICO_HTML"]
+
+    before = digests
+    manifest = Fontico::Manifest.load(File.join(ROOT_DIR, "test/fixtures/icons.yml"))
+    Fontico::Builder.new(manifest, root: ROOT_DIR, output: OUT).call
+    after = digests
+
+    groups = {
+      "added"     => after.keys - before.keys,
+      "changed"   => after.keys.select { before[_1] && before[_1] != after[_1] },
+      "removed"   => before.keys - after.keys,
+      "unchanged" => after.keys.select { before[_1] == after[_1] }
+    }.transform_values(&:sort)
+
+    page = File.join(ROOT_DIR, OUT, "index.html")
+    File.write(page, render(groups))
+
+    drawn = groups.values_at("added", "changed", "unchanged").flatten
+    assert_equal manifest.icons.map(&:name).sort, drawn.sort,
+                 "every icon in the manifest lands in exactly one group"
+    puts "\n  #{page} — #{groups.map { |k, v| "#{v.size} #{k}" }.join(", ")}"
+  end
+
+  private
+
+  # The lock is the only record of the previous build. Read it flat: Lockfile
+  # answers per name, and this needs the whole set on both sides of a build.
+  def digests
+    path = File.join(ROOT_DIR, "icons.lock")
+    return {} unless File.file?(path)
+
+    (YAML.safe_load_file(path)["icons"] || {}).transform_values { _1["digest"] }
+  end
+
+  def render(groups)
+    sprite = File.read(File.join(ROOT_DIR, OUT, "icons.svg"))
+    sections = groups.reject { |_, names| names.empty? }.map { |label, names| section(label, names) }
+    <<~HTML
+      <!doctype html><meta charset="utf-8"><title>fontico preview</title>
+      <style>
+        body { font: 14px system-ui; margin: 2rem; }
+        h2 { text-transform: capitalize; border-bottom: 1px solid #ddd; padding-bottom: .3rem; }
+        h2 small { color: #888; font-weight: normal; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr)); gap: 1rem; }
+        figure { margin: 0; text-align: center; }
+        figure svg { width: 2rem; height: 2rem; }
+        figcaption { color: #666; font-size: 11px; word-break: break-all; }
+        .removed figure { opacity: .4; }
+        .removed figure::before { content: "—"; display: block; font-size: 2rem; line-height: 2rem; }
+      </style>
+      <div style="display:none">#{sprite}</div>
+      #{sections.join("\n")}
+    HTML
+  end
+
+  def section(label, names)
+    cells = names.map do |name|
+      glyph = label == "removed" ? "" : %(<svg><use href="##{name.tr(".", "-")}"/></svg>)
+      %(<figure>#{glyph}<figcaption>#{name}</figcaption></figure>)
+    end
+    %(<h2>#{label} <small>#{names.size}</small></h2>\n<div class="grid #{label}">#{cells.join}</div>)
   end
 end
