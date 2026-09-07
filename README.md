@@ -1,5 +1,3 @@
-<div align="center">
-
 ```
 ╔═╗╔═╗╔╗╔╔╦╗╦╔═╗╔═╗
 ╠╣ ║ ║║║║ ║ ║║  ║ ║
@@ -12,8 +10,6 @@
 [![CI](https://github.com/fireho/fontico/actions/workflows/ci.yml/badge.svg)](https://github.com/fireho/fontico/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE.txt)
 
-</div>
-
 ---
 
 ```erb
@@ -25,13 +21,13 @@
 Three providers, one call. Templates never name a vendor, so re-skinning the
 app — or surviving an upstream rename — is a diff in one file.
 
-| | |
-| --- | --- |
-| **353,000 icons** | any of [Iconify's 238 sets](https://icon-sets.iconify.design/), plus your own folder |
-| **One request** | a single sprite, 2.3KB brotli, not render-blocking |
-| **361ms cold, 2ms warm** | measured on 35 icons across two remote providers and five local files |
-| **No Node, no npm** | the sprite target is pure Ruby; deploys rebuild offline from the lockfile |
-| **Also PDFs** | a real TTF for Prawn, with pinned codepoints |
+|                          |                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| **353,000 icons**        | any of[Iconify's 238 sets](https://icon-sets.iconify.design/), plus your own folder |
+| **One request**          | a single sprite, 2.3KB brotli, not render-blocking                                  |
+| **361ms cold, 2ms warm** | measured on 35 icons across two remote providers and five local files               |
+| **No Node, no npm**      | the sprite target is pure Ruby; deploys rebuild offline from the lockfile           |
+| **Also PDFs**            | a real TTF for Prawn, with pinned codepoints                                        |
 
 ## Install
 
@@ -134,13 +130,13 @@ and no Node. Commit it.
 First-party exports are not uniform the way vendor icons are, so everything
 entering `app/assets/icons/` is normalised first:
 
-| | |
-| --- | --- |
-| Editor chrome | `sodipodi:`, `inkscape:`, `<metadata>`, RDF, empty `<defs>` stripped |
-| Ids | rewritten to `slug__id`, with `url(#…)`, `href`, `clip-path`, `mask` following |
-| viewBox | any source box refitted into the target, centred, aspect preserved |
-| Colour | folded to `currentColor`, unless the icon is detected as multicolour |
-| Safety | `<script>`, `on*` handlers, `<foreignObject>`, external refs removed |
+|               |                                                                                |
+| ------------- | ------------------------------------------------------------------------------ |
+| Editor chrome | `sodipodi:`, `inkscape:`, `<metadata>`, RDF, empty `<defs>` stripped           |
+| Ids           | rewritten to`slug__id`, with `url(#…)`, `href`, `clip-path`, `mask` following |
+| viewBox       | any source box refitted into the target, centred, aspect preserved             |
+| Colour        | folded to`currentColor`, unless the icon is detected as multicolour            |
+| Safety        | `<script>`, `on*` handlers, `<foreignObject>`, external refs removed           |
 
 The id rewriting is not optional hygiene. Across 40 SVGs sampled from a real
 machine, **34 shared `id="layer1"`** and 11 shared `id="path1"` — merging any
@@ -223,11 +219,11 @@ codepoint, so nothing gets hardcoded.
 A font glyph is filled contours; it has no strokes and no colour. Each icon
 takes one of three routes:
 
-| | |
-| --- | --- |
-| **filled** | used as-is — Material Symbols, most Iconify sets, flat first-party exports |
+|               |                                                                                                                         |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **filled**    | used as-is — Material Symbols, most Iconify sets, flat first-party exports                                             |
 | **extracted** | stroke-based, but the provider ships a font whose glyphs are already expanded — lifted from there, losslessly (Lucide) |
-| **refused** | stroke-based with no provider font — the build stops and names the icon |
+| **refused**   | stroke-based with no provider font — the build stops and names the icon                                                |
 
 There is deliberately no raster-trace fallback. Both published JS expanders
 (`svg-outline-stroke`, `oslllo-svg-fixer`) run artwork through potrace and hand
@@ -245,15 +241,15 @@ with `targets: [sprite]` never touches it and stays pure Ruby.
 
 ## How it compares
 
-| | vendor gems (`lucide-rails`, `heroicon`) | `iconify-icon` web component | fontico |
-| --- | --- | --- | --- |
-| Icon sets | one, per gem | 238 | 238, plus your own folder |
-| Where the SVG comes from | inlined per render | fetched at runtime, per client | one build-time sprite |
-| Requests | 0, but repeated in every response body | 1+ per icon, per visitor | 1, cached |
-| JS required | no | yes | no |
-| Rename-proof templates | no — `lucide_icon "pencil"` | no — `icon="lucide:pencil"` | yes — `icon "edit"` |
-| Offline / reproducible build | yes | no | yes, via `icons.lock` |
-| PDF | no | no | yes, TTF for Prawn |
+|                              | vendor gems (`lucide-rails`, `heroicon`) | `iconify-icon` web component   | fontico               |
+| ---------------------------- | ---------------------------------------- | ------------------------------ | --------------------- |
+| Icon sets                    | one, per gem                             | 238                            | 238 + your own       |
+| Where the SVG comes from     | inlined per render                       | fetched at runtime, per client | one build-time sprite |
+| Requests                     | 0, but repeated in every response body   | 1+ per icon, per visitor       | 1, cached             |
+| JS required                  | no                                       | yes                            | no                    |
+| Rename-proof templates       | no —`lucide_icon "pencil"`              | no —`icon="lucide:pencil"`    | yes —`icon "edit"`   |
+| Offline / reproducible build | yes                                      | no                             | yes, via`icons.lock`  |
+| PDF                          | no                                       | no                             | yes, TTF for Prawn    |
 
 ## Status
 
