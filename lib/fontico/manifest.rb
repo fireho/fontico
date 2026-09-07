@@ -13,7 +13,28 @@ module Fontico
 
     attr_reader :path, :defaults, :providers, :targets, :icons
 
-    def self.load(path) = new(YAML.safe_load_file(path), path: path)
+    def self.load(*paths)
+      paths = paths.flatten.compact.select { File.file?(_1) }
+      raise Errno::ENOENT, "icons.yml" if paths.empty?
+
+      data = paths.map { YAML.safe_load_file(_1) || {} }.reduce { |a, b| merge_data(a, b) }
+      new(data, path: paths.last)
+    end
+
+    # Later overlay wins a leaf; nested groups merge so an engine can ship
+    # `auth.google` and the app can add `auth.apple` without copying.
+    def self.merge_data(base, overlay)
+      {
+        "defaults" => (base["defaults"] || {}).merge(overlay["defaults"] || {}),
+        "targets" => overlay["targets"] || base["targets"] || ["sprite"],
+        "providers" => (base["providers"] || {}).merge(overlay["providers"] || {}),
+        "icons" => deep_merge(base["icons"] || {}, overlay["icons"] || {})
+      }
+    end
+
+    def self.deep_merge(left, right)
+      left.merge(right) { |_, a, b| a.is_a?(Hash) && b.is_a?(Hash) ? deep_merge(a, b) : b }
+    end
 
     def initialize(data, path: nil)
       @path      = path

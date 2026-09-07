@@ -958,3 +958,65 @@ class RuntimeFailureTest < Minitest::Test
     assert_includes @view.icon("here"), "#here"
   end
 end
+
+# Engines ship a floor, the app overlays it. Same load order as I18n.
+class ManifestMergeTest < Minitest::Test
+  def setup
+    @dir = Dir.mktmpdir
+    @engine = File.join(@dir, "engine.yml")
+    @app = File.join(@dir, "app.yml")
+    File.write(@engine, YAML.dump(
+                   "defaults" => { "provider" => "material-symbols" },
+                   "targets" => ["sprite"],
+                   "providers" => { "material-symbols" => { "license" => "Apache-2.0" },
+                                    "simple-icons" => { "license" => "CC0-1.0" },
+                                    "lucide" => { "license" => "ISC" } },
+                   "icons" => { "add" => "material-symbols/add",
+                                "auth" => { "google" => "simple-icons/google",
+                                            "facebook" => "simple-icons/facebook" },
+                                "fire" => { "painel" => "material-symbols/grid-view-outline" } }
+                 ))
+    File.write(@app, YAML.dump(
+                   "defaults" => { "provider" => "lucide" },
+                   "providers" => { "lucide" => { "license" => "ISC" }, "local" => {} },
+                   "icons" => { "logo" => "local/logo",
+                                "add" => "lucide/plus",
+                                "auth" => { "google" => "lucide/chrome" } }
+                 ))
+    Fontico.load_path = [@engine, @app]
+  end
+
+  def teardown
+    Fontico.load_path = nil
+    Fontico.reset!
+    FileUtils.remove_entry(@dir)
+  end
+
+  def test_keeps_engine_names_the_app_never_listed
+    m = Fontico.manifest
+    assert m["fire.painel"]
+    assert m["auth.facebook"]
+    assert m["logo"]
+  end
+
+  def test_the_app_wins_a_name_and_keeps_the_rest_of_the_group
+    m = Fontico.manifest
+    assert_equal "lucide", m["add"].provider
+    assert_equal "plus", m["add"].slug
+    assert_equal "chrome", m["auth.google"].slug
+    assert m["auth.facebook"], "engine sibling in the group must survive"
+  end
+
+  def test_app_defaults_and_providers_layer
+    m = Fontico.manifest
+    assert_equal "lucide", m.default_provider
+    assert m.providers.key?("material-symbols")
+    assert m.providers.key?("lucide")
+  end
+
+  def test_a_single_file_still_loads
+    Fontico.load_path = [@app]
+    assert Fontico.manifest["logo"]
+    assert_nil Fontico.manifest["fire.painel"]
+  end
+end

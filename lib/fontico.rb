@@ -34,8 +34,34 @@ module Fontico
     def root          = @root ||= Dir.pwd
     def output_dir    = @output_dir ||= "app/assets/builds"
     def manifest_path = @manifest_path ||= File.join(root, "icons.yml")
-    def manifest      = @manifest ||= Manifest.load(manifest_path)
+    # Same shape as I18n.load_path: engines first, the app last, later wins
+    # a name. Unset, it is just the app's icons.yml (non-Rails, tests).
+    def load_path     = @load_path || [manifest_path].select { File.file?(_1) }
+
+    def load_path=(paths)
+      @load_path = paths.nil? ? nil : Array(paths)
+      reset!
+    end
+
+    def manifest      = @manifest ||= Manifest.load(*load_path)
     def sprite_file   = File.join(root, output_dir, "icons.svg")
+
+    # Rails engines that ship config/icons.yml (or icons.yml at the gem
+    # root), then the app's file. The app is last on purpose.
+    def discover(app)
+      files = []
+      app.railties.each do |rt|
+        next unless rt.is_a?(Rails::Engine)
+        next if rt.is_a?(Rails::Application)
+
+        root = rt.root
+        found = %w[config/icons.yml icons.yml].map { root.join(_1) }.find { File.file?(_1.to_s) }
+        files << found.to_s if found
+      end
+      # manifest_path goes in even when absent: the dev watcher has to notice
+      # an icons.yml created after boot. Manifest.load skips what isn't there.
+      (files.select { File.file?(_1) } << manifest_path).uniq
+    end
 
     # Inline mode embeds <symbol> definitions in the layout instead of
     # referencing an external file — required when assets are served from a

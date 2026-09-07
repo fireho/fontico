@@ -12,6 +12,12 @@ module Fontico
       Fontico.root = Rails.root.to_s
     end
 
+    # Engines' config/icons.yml under the app's icons.yml. After root: the
+    # app file is Rails.root/icons.yml, not whatever Dir.pwd was at require.
+    initializer "fontico.load_path", after: "fontico.root" do |app|
+      Fontico.load_path = Fontico.discover(app)
+    end
+
     # Saving icons.yml — or a local SVG — rebuilds the artifacts and drops the
     # memoized manifest, so a new icon is live on the next request with no
     # restart and no rake. That memo is the only thing that ever needed one:
@@ -20,7 +26,7 @@ module Fontico
     initializer "fontico.reloader" do |app|
       next unless app.config.enable_reloading
 
-      watcher = app.config.file_watcher.new([Fontico.manifest_path], Railtie.local_dirs) do
+      watcher = app.config.file_watcher.new(Fontico.load_path, Railtie.local_dirs) do
         Fontico.reset!
         Fontico.rebuild!
         # Recorded rather than raised: a save that half-breaks the manifest

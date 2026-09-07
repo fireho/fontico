@@ -76,6 +76,12 @@ Like pokemon, you gotta catch 'em all.
 Any of [Iconify's sets](https://icon-sets.iconify.design/) work as a provider
 prefix. Your own SVGs go in `app/assets/icons/`, filename as slug.
 
+A Rails engine that ships `config/icons.yml` (or `icons.yml` at its root) is
+merged under the app's file, the same way `config/locales/` layers. Later
+wins a name — the app always has the last word. Nested groups merge, so an
+engine can ship `auth.google` and the app can add `auth.apple` without
+copying the rest. `rake fontico:build` reads the same list.
+
 ## Build
 
 ```bash

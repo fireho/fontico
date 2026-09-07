@@ -31,16 +31,24 @@ def fontico_print_report(report)
   end
 end
 
+def fontico_rails_load_path!
+  return unless defined?(Rails) && Rails.respond_to?(:application) && Rails.application
+
+  Fontico.load_path = Fontico.discover(Rails.application)
+end
+
 namespace :fontico do
   desc "Build icon artifacts from icons.yml"
   task :build do
     require "fontico"
+    fontico_rails_load_path!
     fontico_print_report(Fontico.build)
   end
 
   desc "Re-fetch every icon from its provider. Codepoints stay pinned."
   task :update do
     require "fontico"
+    fontico_rails_load_path!
     fontico_print_report(Fontico.build(force: true))
   end
 end
