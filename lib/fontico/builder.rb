@@ -31,7 +31,15 @@ module Fontico
       # are already on disk: treating them as fresh meant editing logo.svg
       # rebuilt nothing. Force is `rake fontico:update` — re-fetch remotes,
       # keep the append-only codepoints.
-      stale = @manifest.icons.select { _1.local? || @force || !@lock.fresh?(_1.name, _1.source) }
+      # A lock from before sizes were recorded is taken at the manifest's word
+      # once, here, so an upgrade does not re-fetch everything. From then on a
+      # change to `defaults: size:` is caught like any other input change.
+      @lock.assume_size(@manifest.size)
+
+      stale = @manifest.icons.select do |icon|
+        icon.local? || @force ||
+          !@lock.fresh?(icon.name, icon.source, size: @manifest.size, multicolor: icon.multicolor)
+      end
       cached = @manifest.icons.map(&:name) - stale.map(&:name)
 
       unless stale.empty?
@@ -40,10 +48,7 @@ module Fontico
         # when a remote body has to come off the wire — which under force is
         # every remote, lock or no lock. Saying "missing" there would be a
         # lie: the bodies are present, force is what made them stale.
-        if @offline && remote_stale.any?
-          reason = @force ? "re-fetch #{remote_stale.size} icon(s)" : "resolve #{remote_stale.size} icon(s) missing from icons.lock"
-          raise Error, "cannot #{reason} and --offline was given"
-        end
+        raise Error, "cannot #{offline_blocker(remote_stale)} and --offline was given" if @offline && remote_stale.any?
 
         resolver = Resolver.new(@manifest, root: @root)
         sources = resolver.call(only: stale.map(&:name))
@@ -63,7 +68,7 @@ module Fontico
           # remote is judged by the wire, not the digest: under force it was
           # genuinely re-fetched even when it came back byte-identical.
           before = @lock.entry(icon.name)&.fetch("digest", nil)
-          @lock.store(icon.name, source: icon.source, body: pre.body,
+          @lock.store(icon.name, source: icon.source, body: pre.body, size: @manifest.size,
                       multicolor: pre.multicolor, warnings: pre.warnings)
           unchanged = icon.local? && @lock.entry(icon.name)["digest"] == before
           (unchanged ? cached : fetched) << icon.name
@@ -88,6 +93,25 @@ module Fontico
     end
 
     private
+
+    # "missing from icons.lock" is a lie when every body is present and
+    # something else invalidated them, so name the thing that actually did.
+    # A body carries its refit baked in, so a new size needs the original
+    # geometry back off the wire — there is nothing on disk to redo it from.
+    def offline_blocker(remote_stale)
+      count = remote_stale.size
+      return "re-fetch #{count} icon(s)" if @force
+      return "resolve #{count} icon(s) missing from icons.lock" unless remote_stale.all? { locked?(_1) }
+
+      "re-preprocess #{count} icon(s) at size: #{@manifest.size}"
+    end
+
+    # Present in the lock, with a body, for this source — so not "missing",
+    # only invalidated by one of the inputs #fresh? checks alongside it.
+    def locked?(icon)
+      e = @lock.entry(icon.name)
+      !e.nil? && !e["body"].nil? && e["source"] == icon.source
+    end
 
     def emit(icons)
       FileUtils.mkdir_p(@output)

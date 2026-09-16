@@ -10,27 +10,25 @@ module Fontico
     # it on the baseline. Pass size: to override, or a CSS class — classes win
     # over the attributes, so `class: "size-6"` works untouched.
     def icon(name, size: nil, variant: nil, **options)
-      Fontico.check!(name.to_s)
-      entry = Fontico.manifest[name.to_s]
-      return missing(name) if entry.nil?
+      key = name.to_s
+      Fontico.check!(key)
 
-      symbol = entry.key
-      attrs = {
-        class: [Fontico.css_class, options.delete(:class)].compact.join(" "),
-        width: size || "1em",
-        height: size || "1em",
-        style: inline_size(size, options.delete(:style)),
-        "aria-hidden": options.key?(:title) ? nil : "true",
-        role: options.key?(:title) ? "img" : nil
-      }.merge(options).compact
+      # A bare icon(name) is deterministic apart from one thing. The attrs
+      # hash, the html_escape of constants like "1em" and "true", the string
+      # assembly — 22 objects a call, every call, for markup that never
+      # changes. The exception is the sprite path, because asset_host is
+      # allowed to be a proc that reads the request, so what gets cached is
+      # the markup either side of the href and the path is still resolved per
+      # call. Fontico.reset! drops the cache, which the dev watcher already
+      # calls after every rebuild.
+      pair = if size.nil? && variant.nil? && options.empty?
+               Fontico.icon_cache[key] ||= halves(key)
+             else
+               halves(key, size: size, **options)
+             end
+      return missing(name) if pair.nil?
 
-      title = attrs.delete(:title)
-      body = +""
-      body << "<title>#{ERB::Util.html_escape(title)}</title>" if title
-      body << %(<use href="#{sprite_path(variant)}##{symbol}"></use>)
-
-      tag = %(<svg #{attrs.map { |k, v| %(#{k}="#{ERB::Util.html_escape(v)}") }.join(" ")}>#{body}</svg>)
-      tag.respond_to?(:html_safe) ? tag.html_safe : tag
+      safe("#{pair[0]}#{sprite_path(variant)}#{pair[1]}")
     end
 
     # The `<use href>` for one icon, for markup this helper doesn't build —
@@ -45,8 +43,9 @@ module Fontico
     # icons_sprite for the inline case, where the path half is empty and the
     # fragment resolves against the current document.
     def icon_href(name)
-      Fontico.check!(name.to_s)
-      entry = Fontico.manifest[name.to_s]
+      key = name.to_s
+      Fontico.check!(key)
+      entry = Fontico.manifest[key]
       raise Fontico::Error, "no icon named #{name.inspect} in #{Fontico.manifest_path}" if entry.nil?
 
       "#{sprite_path}##{entry.key}"
@@ -56,11 +55,37 @@ module Fontico
     # where a cross-origin <use href> would silently render nothing.
     def icons_sprite
       Fontico.check!
-      svg = File.read(Fontico.sprite_file)
-      svg.respond_to?(:html_safe) ? svg.html_safe : svg
+      safe(Fontico.sprite_markup)
     end
 
     private
+
+    # The markup either side of the `href` value, so a caller can drop a
+    # freshly resolved sprite path between them. Nil when the manifest has no
+    # such name. Everything in here is a pure function of the entry and the
+    # options, which is exactly what makes the bare case worth caching.
+    def halves(key, size: nil, **options)
+      entry = Fontico.manifest[key]
+      return nil if entry.nil?
+
+      attrs = {
+        class: [Fontico.css_class, options.delete(:class)].compact.join(" "),
+        width: size || "1em",
+        height: size || "1em",
+        style: inline_size(size, options.delete(:style)),
+        "aria-hidden": options.key?(:title) ? nil : "true",
+        role: options.key?(:title) ? "img" : nil
+      }.merge(options).compact
+
+      title = attrs.delete(:title)
+      open = +"<svg #{attrs.map { |k, v| %(#{k}="#{ERB::Util.html_escape(v)}") }.join(" ")}>"
+      open << "<title>#{ERB::Util.html_escape(title)}</title>" if title
+      open << %(<use href=")
+
+      [open.freeze, %(##{entry.key}"></use></svg>).freeze]
+    end
+
+    def safe(str) = str.respond_to?(:html_safe) ? str.html_safe : str
 
     # width/height on an <svg> are presentation attributes, and *any* CSS
     # declaration outranks those — including icons.css's own `.ico { width:

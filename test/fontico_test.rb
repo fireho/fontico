@@ -14,6 +14,29 @@ require "fileutils"
 require "yaml"
 require "fontico"
 
+# Builder constructs its own Resolver, so a test that needs to see what came
+# off the wire has to intercept at the class. Prepended once, and inert
+# unless a test sets an override, so a random order cannot leave a stub
+# behind. Tests that own their Resolver keep defining a singleton `fetch` —
+# the singleton class is ahead of this in the lookup, so it still wins.
+module StubbableFetch
+  def fetch(provider, slugs)
+    stub = Thread.current[:fontico_fetch_stub]
+    stub ? stub.call(provider, slugs) : super
+  end
+  private :fetch
+end
+Fontico::Resolver.prepend(StubbableFetch)
+
+module FetchStubbing
+  def with_stubbed_fetch(builder, &blk)
+    Thread.current[:fontico_fetch_stub] = ->(_provider, slugs) { blk.call(slugs) }
+    builder.call
+  ensure
+    Thread.current[:fontico_fetch_stub] = nil
+  end
+end
+
 class ManifestTest < Minitest::Test
   def manifest(data) = Fontico::Manifest.new(data)
 
@@ -171,6 +194,8 @@ end
 
 # The build keeps going, and the artifacts come out without the bad icon.
 class BuilderMissingTest < Minitest::Test
+  include FetchStubbing
+
   def test_the_sprite_is_written_without_the_missing_icon
     Dir.mktmpdir do |root|
       FileUtils.mkdir_p(File.join(root, "icons"))
@@ -252,7 +277,8 @@ class BuilderMissingTest < Minitest::Test
           "icons" => { "save" => "lucide/save" } }
       )
       lock = Fontico::Lockfile.new(File.join(root, "icons.lock"))
-      lock.store("save", source: "lucide/save", body: "<path d='M1 1'/>")
+      # size has to match the manifest's or the body is stale, by design.
+      lock.store("save", source: "lucide/save", body: "<path d='M1 1'/>", size: 24)
       lock.save!
 
       report = Fontico::Builder.new(m, root: root, output: "builds", offline: true).call
@@ -318,6 +344,140 @@ class BuilderMissingTest < Minitest::Test
     end
   end
 
+  # The body carries its refit baked in as a <g transform>, but the sprite
+  # emitter reads the target size live. Keyed on the source alone, changing
+  # `defaults: size:` moved the <symbol> to the new viewBox and left the
+  # geometry inside it fit to the old grid — every icon a fraction of its
+  # size in the corner of its box, on a page that 200s.
+  #
+  # It takes a *remote* to see this. Local files are re-read every build and
+  # refit on the way through, so they self-heal; a local-only version of this
+  # test passes against the very bug it names.
+  def test_changing_the_target_size_refits_a_cached_remote
+    Dir.mktmpdir do |root|
+      lock = Fontico::Lockfile.new(File.join(root, "icons.lock"))
+      lock.store("save", source: "lucide/save", size: 24,
+                 body: %(<g transform="scale(0.5)"><path d="M0 0h48v48H0Z"/></g>))
+      lock.save!
+
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"], "defaults" => { "size" => 96 },
+          "providers" => { "lucide" => {} },
+          "icons" => { "save" => "lucide/save" } }
+      )
+      # The only way to refit is from the original geometry, which the lock
+      # does not keep — so the icon has to come back off the wire.
+      asked_for = nil
+      report = with_stubbed_fetch(Fontico::Builder.new(m, root: root, output: "builds")) do |slugs|
+        asked_for = slugs
+        { "icons" => { "save" => { "body" => %(<path d="M0 0h48v48H0Z"/>) } },
+          "aliases" => {}, "width" => 48, "height" => 48 }
+      end
+
+      assert_equal ["save"], asked_for, "a resize must re-resolve, not reuse"
+      assert_equal ["save"], report.fetched
+      assert_empty report.cached
+
+      sprite = File.read(File.join(root, "builds", "icons.svg"))
+      assert_includes sprite, %(viewBox="0 0 96 96"), "the symbol moves to the new grid"
+      assert_includes sprite, "scale(2)", "and the geometry inside moves with it"
+      refute_includes sprite, "scale(0.5)", "the body refit for the old grid must be gone"
+    end
+  end
+
+  # A lock from before sizes were recorded cannot say what grid it was built
+  # on. Calling it stale would re-fetch a whole manifest on a gem upgrade and
+  # put a network round trip in the first deploy after it, so it is taken at
+  # the manifest's word once and stamped.
+  def test_a_lock_without_recorded_sizes_is_taken_at_its_word
+    Dir.mktmpdir do |root|
+      path = File.join(root, "icons.lock")
+      File.write(path, { "format" => 1, "codepoints" => { "save" => 0xE001 }, "retired" => {},
+                         "icons" => { "save" => { "source" => "lucide/save",
+                                                  "multicolor" => false,
+                                                  "body" => "<path d='M1 1'/>" } } }.to_yaml)
+
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"], "providers" => { "lucide" => {} },
+          "icons" => { "save" => "lucide/save" } }
+      )
+      report = Fontico::Builder.new(m, root: root, output: "builds", offline: true).call
+
+      assert_equal ["save"], report.cached, "an upgrade must not re-fetch"
+      assert_equal 24, YAML.safe_load_file(path)["icons"]["save"]["size"],
+                   "and the assumption gets written down, so the next change is caught"
+    end
+  end
+
+  # Same class of bug as the size one: the manifest's multicolor override is
+  # an input to the body, so flipping it has to re-preprocess. Keyed on the
+  # source alone, the body stayed folded to currentColor and the font emitter
+  # kept accepting an icon the author had just declared unrepresentable.
+  def test_flipping_the_multicolor_override_invalidates_the_body
+    Dir.mktmpdir do |root|
+      lock = Fontico::Lockfile.new(File.join(root, "icons.lock"))
+      lock.store("brand", source: "lucide/brand", size: 24, multicolor: false,
+                 body: %(<path fill="currentColor" d="M0 0"/>))
+      lock.save!
+
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"], "providers" => { "lucide" => {} },
+          "icons" => { "brand" => { "icon" => "lucide/brand", "multicolor" => true } } }
+      )
+      report = with_stubbed_fetch(Fontico::Builder.new(m, root: root, output: "builds")) do |_slugs|
+        { "icons" => { "brand" => { "body" => %(<path fill="#5b8def" d="M0 0"/>) } },
+          "aliases" => {}, "width" => 24, "height" => 24 }
+      end
+
+      assert_equal ["brand"], report.fetched
+      assert YAML.safe_load_file(File.join(root, "icons.lock"))["icons"]["brand"]["multicolor"],
+             "the override has to reach the lock"
+      assert_includes File.read(File.join(root, "builds", "icons.svg")), "#5b8def",
+                      "and the palette has to survive into the sprite"
+    end
+  end
+
+  # An unchanged manifest must still be a no-op, or the two tests above would
+  # pass just as well against a lock that never caches anything.
+  def test_an_unchanged_size_still_counts_as_cached
+    Dir.mktmpdir do |root|
+      lock = Fontico::Lockfile.new(File.join(root, "icons.lock"))
+      lock.store("save", source: "lucide/save", body: "<path d='M1 1'/>", size: 48)
+      lock.save!
+
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"], "defaults" => { "size" => 48 },
+          "providers" => { "lucide" => {} },
+          "icons" => { "save" => "lucide/save" } }
+      )
+      report = Fontico::Builder.new(m, root: root, output: "builds", offline: true).call
+      assert_equal ["save"], report.cached
+      assert_empty report.fetched
+    end
+  end
+
+  # Offline used to blame icons.lock for everything. The bodies are all
+  # present here; the size is what invalidated them, and there is nothing on
+  # disk to refit from, so say that instead.
+  def test_offline_names_the_resize_rather_than_blaming_the_lock
+    Dir.mktmpdir do |root|
+      lock = Fontico::Lockfile.new(File.join(root, "icons.lock"))
+      lock.store("save", source: "lucide/save", body: "<path d='M1 1'/>", size: 24)
+      lock.save!
+
+      m = Fontico::Manifest.new(
+        { "targets" => ["sprite"], "defaults" => { "size" => 96 },
+          "providers" => { "lucide" => {} },
+          "icons" => { "save" => "lucide/save" } }
+      )
+      err = assert_raises(Fontico::Error) do
+        Fontico::Builder.new(m, root: root, output: "builds", offline: true).call
+      end
+      assert_match(/re-preprocess 1 icon\(s\) at size: 96/, err.message)
+      refute_match(/missing/, err.message)
+    end
+  end
+
   def test_force_treats_a_cached_remote_as_stale
     Dir.mktmpdir do |root|
       m = Fontico::Manifest.new(
@@ -326,7 +486,7 @@ class BuilderMissingTest < Minitest::Test
           "icons" => { "save" => "lucide/save" } }
       )
       lock = Fontico::Lockfile.new(File.join(root, "icons.lock"))
-      lock.store("save", source: "lucide/save", body: "<path d='M1 1'/>")
+      lock.store("save", source: "lucide/save", body: "<path d='M1 1'/>", size: 24)
       lock.save!
 
       err = assert_raises(Fontico::Error) do
@@ -376,7 +536,7 @@ class CodepointApiTest < Minitest::Test
     @dir = Dir.mktmpdir
     Fontico.root = @dir
     lock = Fontico.lockfile
-    lock.store("save", source: "lucide/save", body: "<path/>")
+    lock.store("save", source: "lucide/save", body: "<path/>", size: 24)
     lock.save!
   end
 
@@ -562,7 +722,7 @@ class LockfileTest < Minitest::Test
 
   def test_warnings_survive_a_reload
     with_lock do |lock, dir|
-      lock.store("watermark", source: "local/watermark", body: "<path/>",
+      lock.store("watermark", source: "local/watermark", body: "<path/>", size: 24,
                  warnings: ["contains live <text>"])
       lock.save!
       reopened = Fontico::Lockfile.new(File.join(dir, "icons.lock"))
@@ -825,6 +985,145 @@ class HelperTest < Minitest::Test
     assert_equal "#save", @view.icon_href("save")
   ensure
     Fontico.inline_sprite = false
+  end
+end
+
+# The markup for a bare icon(name) is cached, so everything that can still
+# change underneath it has to keep working. A regression here is icons
+# pointing at a sprite that isn't there — an empty box on a page that 200s.
+class HelperCacheTest < Minitest::Test
+  class View
+    include Fontico::Helper
+
+    class << self
+      attr_accessor :host
+    end
+
+    # Stands in for Propshaft, which is what supplies asset_path in an app.
+    def asset_path(name) = "#{View.host}/assets/#{name.sub(".svg", "-abc123.svg")}"
+  end
+
+  def setup
+    Fontico.manifest_path = File.expand_path("fixtures/icons.yml", __dir__)
+    Fontico.reset!
+    View.host = ""
+    @view = View.new
+  end
+
+  def teardown
+    Fontico.manifest_path = nil
+    View.host = ""
+    Fontico.reset!
+  end
+
+  def test_the_digest_path_still_reaches_the_cached_markup
+    assert_includes @view.icon("save"), %(href="/assets/icons-abc123.svg#save")
+  end
+
+  # The reason the whole string is not cached: asset_host is allowed to be a
+  # proc that reads the request, so a path held across requests would serve
+  # the wrong host to somebody.
+  def test_a_path_that_changes_between_calls_is_followed
+    before = @view.icon("save")
+    View.host = "https://cdn.example.com"
+    after = @view.icon("save")
+
+    assert_includes before, %(href="/assets/icons-abc123.svg#save")
+    assert_includes after, %(href="https://cdn.example.com/assets/icons-abc123.svg#save")
+  end
+
+  def test_options_are_not_served_out_of_the_bare_cache
+    @view.icon("save") # prime it
+    assert_includes @view.icon("save", size: 16), 'style="width:16px;height:16px"'
+    assert_includes @view.icon("save", class: "size-6"), 'class="ico size-6"'
+    assert_includes @view.icon("save", title: "Save"), "<title>Save</title>"
+  end
+
+  # ...and an optioned call must not poison the bare one on the way past.
+  def test_the_bare_call_survives_an_optioned_one
+    @view.icon("save", size: 99, class: "x", title: "T")
+    bare = @view.icon("save")
+
+    assert_includes bare, 'width="1em"'
+    assert_includes bare, 'class="ico"'
+    assert_includes bare, 'aria-hidden="true"'
+    refute_includes bare, "99"
+    refute_includes bare, "<title>"
+  end
+
+  def test_a_name_the_manifest_lacks_still_raises_rather_than_caching_a_blank
+    assert_raises(Fontico::Error) { @view.icon("nope") }
+    assert_raises(Fontico::Error) { @view.icon("nope") }
+  end
+
+  # The cache is keyed by name, so a manifest edit that repoints one has to
+  # invalidate it, or a save leaves the old symbol id in place and the <use>
+  # lands on a symbol the new sprite never defined.
+  def test_a_repointed_name_is_re_rendered_after_reset
+    dir = Dir.mktmpdir
+    path = File.join(dir, "icons.yml")
+    Fontico.manifest_path = path
+    write = lambda do |icons|
+      File.write(path, YAML.dump("providers" => { "lucide" => {} }, "icons" => icons))
+      Fontico.reset!
+    end
+
+    write.call("nav" => { "menu" => "lucide/menu" })
+    assert_includes @view.icon("nav.menu"), "#nav-menu"
+    refute_empty Fontico.icon_cache
+
+    write.call("menu" => "lucide/menu")
+    assert_empty Fontico.icon_cache, "reset! has to drop the rendered markup too"
+    assert_includes @view.icon("menu"), "#menu"
+  ensure
+    FileUtils.remove_entry(dir)
+  end
+end
+
+# Inline mode holds the sprite in memory rather than re-reading 10KB off disk
+# per request, so a rebuilt file has to be noticed or the page embeds
+# yesterday's symbols.
+class InlineSpriteTest < Minitest::Test
+  class View; include Fontico::Helper; end
+
+  def setup
+    @dir = Dir.mktmpdir
+    FileUtils.mkdir_p(File.join(@dir, "builds"))
+    Fontico.root = @dir
+    Fontico.output_dir = "builds"
+    Fontico.reset!
+    @view = View.new
+  end
+
+  def teardown
+    Fontico.root = Fontico.output_dir = nil
+    Fontico.reset!
+    FileUtils.remove_entry(@dir)
+  end
+
+  def write(svg) = File.write(File.join(@dir, "builds", "icons.svg"), svg)
+
+  def test_a_rebuilt_sprite_is_picked_up_without_a_reset
+    write("<svg><symbol id='a'/></svg>")
+    assert_includes @view.icons_sprite, "id='a'"
+
+    # Longer on purpose: the stat compares size as well as mtime, so this
+    # holds on a filesystem whose mtime granularity is a whole second.
+    write("<svg><symbol id='b'/><symbol id='c'/></svg>")
+    assert_includes @view.icons_sprite, "id='b'"
+    refute_includes @view.icons_sprite, "id='a'"
+  end
+
+  def test_repeated_calls_return_the_same_held_string
+    write("<svg><symbol id='a'/></svg>")
+    assert_same Fontico.sprite_markup, Fontico.sprite_markup
+  end
+
+  def test_reset_drops_the_held_sprite
+    write("<svg><symbol id='a'/></svg>")
+    held = Fontico.sprite_markup
+    Fontico.reset!
+    refute_same held, Fontico.sprite_markup
   end
 end
 

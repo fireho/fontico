@@ -49,7 +49,13 @@ module Fontico
     def local_path       = providers.dig("local", "path") || LOCAL_PATH
     def size             = defaults.fetch("size", 24).to_i
 
-    def [](name) = icons.find { _1.name == name }
+    # Every icon() call in every template comes through here, and a linear
+    # scan charged for the size of the manifest rather than for the icons a
+    # page actually draws: 11.5us a call at 300 names against 5us at 92, so
+    # naming icons you never draw slowed down the ones you do. Backwards for
+    # a gem whose pitch is 353,000 icons to choose from. The table is built
+    # once and @icons is frozen, so there is nothing to invalidate.
+    def [](name) = index[name]
 
     # Vendor icons grouped by provider so the resolver can batch one HTTP
     # request per provider instead of one per icon.
@@ -60,6 +66,8 @@ module Fontico
     def local_icons = icons.select(&:local?)
 
     private
+
+    def index = @index ||= icons.to_h { [_1.name, _1] }
 
     def flatten(tree, prefix = nil)
       tree.flat_map do |key, value|

@@ -1,0 +1,385 @@
+---
+format: 1
+codepoints:
+  add: 57356
+  back: 57353
+  calendar: 57371
+  close: 57357
+  confirm: 57358
+  copy: 57347
+  delete: 57355
+  document: 57369
+  download: 57363
+  edit: 57346
+  empty-box: 57377
+  error: 57366
+  expand: 57352
+  external: 57351
+  favorite: 57383
+  filter: 57349
+  folder: 57370
+  info: 57368
+  inkspace-1: 57380
+  loading: 57354
+  logo: 57375
+  logomark: 57376
+  logout: 57362
+  mail: 57372
+  menu: 57359
+  nav.menu: 57381
+  notify: 57373
+  profile: 57361
+  refresh: 57350
+  save: 57345
+  search: 57348
+  settings: 57360
+  spinner: 57378
+  success: 57365
+  upload: 57364
+  warning: 57367
+  watermark: 57379
+retired:
+  favorite: 57374
+  starred: 57382
+icons:
+  add:
+    source: material-symbols/add
+    digest: 1279a783fa6ff410
+    multicolor: false
+    warnings: []
+    body: "<path d='M11 13H5v-2h6V5h2v6h6v2h-6v6h-2z' fill='currentColor'/>"
+    size: 24
+  back:
+    source: lucide/arrow-left
+    digest: 37cb2344f67c5c84
+    multicolor: false
+    warnings: []
+    body: "<path d='m12 19l-7-7l7-7m7 7H5' fill='none' stroke='currentColor' stroke-linecap='round'
+      stroke-linejoin='round' stroke-width='2'/>"
+    size: 24
+  calendar:
+    source: material-symbols/calendar-month
+    digest: 71a35d6140dd7594
+    multicolor: false
+    warnings: []
+    body: "<path d='M12 14q-.425 0-.712-.288T11 13t.288-.712T12 12t.713.288T13 13t-.288.713T12
+      14m-4.712-.288Q7 13.426 7 13t.288-.712T8 12t.713.288T9 13t-.288.713T8 14t-.712-.288M16
+      14q-.425 0-.712-.288T15 13t.288-.712T16 12t.713.288T17 13t-.288.713T16 14m-4
+      4q-.425 0-.712-.288T11 17t.288-.712T12 16t.713.288T13 17t-.288.713T12 18m-4.712-.288Q7
+      17.426 7 17t.288-.712T8 16t.713.288T9 17t-.288.713T8 18t-.712-.288M16 18q-.425
+      0-.712-.288T15 17t.288-.712T16 16t.713.288T17 17t-.288.713T16 18M5 22q-.825
+      0-1.412-.587T3 20V6q0-.825.588-1.412T5 4h1V2h2v2h8V2h2v2h1q.825 0 1.413.588T21
+      6v14q0 .825-.587 1.413T19 22zm0-2h14V10H5z' fill='currentColor'/>"
+    size: 24
+  close:
+    source: material-symbols/close
+    digest: 16016a356145763f
+    multicolor: false
+    warnings: []
+    body: "<path d='M6.4 19L5 17.6l5.6-5.6L5 6.4L6.4 5l5.6 5.6L17.6 5L19 6.4L13.4
+      12l5.6 5.6l-1.4 1.4l-5.6-5.6z' fill='currentColor'/>"
+    size: 24
+  confirm:
+    source: material-symbols/check
+    digest: c3c1ce269e4a0ba3
+    multicolor: false
+    warnings: []
+    body: "<path d='m9.55 18l-5.7-5.7l1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z'
+      fill='currentColor'/>"
+    size: 24
+  copy:
+    source: lucide/copy
+    digest: a3b2d78c46817fa2
+    multicolor: false
+    warnings: []
+    body: "<g fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round'
+      stroke-width='2'><rect height='14' rx='2' ry='2' width='14' x='8' y='8'/><path
+      d='M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2'/></g>"
+    size: 24
+  delete:
+    source: material-symbols/delete
+    digest: 5ca1d189f1577f19
+    multicolor: false
+    warnings: []
+    body: "<path d='M7 21q-.825 0-1.412-.587T5 19V6H4V4h5V3h6v1h5v2h-1v13q0 .825-.587
+      1.413T17 21zm2-4h2V8H9zm4 0h2V8h-2z' fill='currentColor'/>"
+    size: 24
+  document:
+    source: material-symbols/description
+    digest: 6dd5cb167c53958a
+    multicolor: false
+    warnings: []
+    body: "<path d='M8 18h8v-2H8zm0-4h8v-2H8zm-2 8q-.825 0-1.412-.587T4 20V4q0-.825.588-1.412T6
+      2h8l6 6v12q0 .825-.587 1.413T18 22zm7-13h5l-5-5z' fill='currentColor'/>"
+    size: 24
+  download:
+    source: material-symbols/download
+    digest: 30030049a1658391
+    multicolor: false
+    warnings: []
+    body: "<path d='m12 16l-5-5l1.4-1.45l2.6 2.6V4h2v8.15l2.6-2.6L17 11zm-6 4q-.825
+      0-1.412-.587T4 18v-3h2v3h12v-3h2v3q0 .825-.587 1.413T18 20z' fill='currentColor'/>"
+    size: 24
+  edit:
+    source: lucide/pencil
+    digest: a1630e6ec606bc1e
+    multicolor: false
+    warnings: []
+    body: "<path d='M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321
+      4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497zM15 5l4 4' fill='none'
+      stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='2'/>"
+    size: 24
+  empty-box:
+    source: local/empty-box
+    digest: '0549677d700ca2e8'
+    multicolor: false
+    warnings: []
+    body: |-
+      <g transform="translate(0 0) scale(0.25) translate(-0 -0)"><g id='empty-box__layer1'>
+          <path d='M12 28 48 12l36 16v40L48 84 12 68Zm36 8 24-10-24-10-24 10Z' fill='currentColor' id='empty-box__path1'/>
+        </g></g>
+    size: 24
+  error:
+    source: material-symbols/error
+    digest: c810905d741d99c1
+    multicolor: false
+    warnings: []
+    body: "<path d='M12.713 16.713Q13 16.425 13 16t-.288-.712T12 15t-.712.288T11 16t.288.713T12
+      17t.713-.288M11 13h2V7h-2zm1 9q-2.075 0-3.9-.788t-3.175-2.137T2.788 15.9T2 12t.788-3.9t2.137-3.175T8.1
+      2.788T12 2t3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175
+      2.138T12 22' fill='currentColor'/>"
+    size: 24
+  expand:
+    source: lucide/chevron-down
+    digest: 32dd6e116123346b
+    multicolor: false
+    warnings: []
+    body: "<path d='m6 9l6 6l6-6' fill='none' stroke='currentColor' stroke-linecap='round'
+      stroke-linejoin='round' stroke-width='2'/>"
+    size: 24
+  external:
+    source: lucide/external-link
+    digest: 278fc315fafd710d
+    multicolor: false
+    warnings: []
+    body: "<path d='M15 3h6v6m-11 5L21 3m-3 10v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2
+      2 0 0 1 2-2h6' fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round'
+      stroke-width='2'/>"
+    size: 24
+  favorite:
+    source: material-symbols/star
+    digest: 209cfa27f70b29fe
+    multicolor: false
+    warnings: []
+    body: "<path d='m5.825 21l1.625-7.025L2 9.25l7.2-.625L12 2l2.8 6.625l7.2.625l-5.45
+      4.725L18.175 21L12 17.275z' fill='currentColor'/>"
+    size: 24
+  filter:
+    source: lucide/filter
+    digest: 031f1b57264e12c6
+    multicolor: false
+    warnings: []
+    body: "<path d='M22 3H2l8 9.46V19l4 2v-8.54z' fill='none' stroke='currentColor'
+      stroke-linecap='round' stroke-linejoin='round' stroke-width='2'/>"
+    size: 24
+  folder:
+    source: material-symbols/folder
+    digest: ccdf67399140e5ab
+    multicolor: false
+    warnings: []
+    body: "<path d='M4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h6l2 2h8q.825
+      0 1.413.588T22 8v10q0 .825-.587 1.413T20 20z' fill='currentColor'/>"
+    size: 24
+  info:
+    source: material-symbols/info
+    digest: c7af467c2966003d
+    multicolor: false
+    warnings: []
+    body: "<path d='M11 17h2v-6h-2zm1.713-8.287Q13 8.425 13 8t-.288-.712T12 7t-.712.288T11
+      8t.288.713T12 9t.713-.288M12 22q-2.075 0-3.9-.788t-3.175-2.137T2.788 15.9T2
+      12t.788-3.9t2.137-3.175T8.1 2.788T12 2t3.9.788t3.175 2.137T21.213 8.1T22 12t-.788
+      3.9t-2.137 3.175t-3.175 2.138T12 22' fill='currentColor'/>"
+    size: 24
+  inkspace-1:
+    source: local/inkspace-1
+    digest: 4fe7f04866a269b2
+    multicolor: false
+    warnings: []
+    body: |-
+      <g transform="translate(0 0) scale(3.7795) translate(-0 -0)"><g id='inkspace-1__layer1'>
+          <path d='M 0.72496861,0.72496855 H 3.4611403 V 3.5196053 H 0.72496861 Z' id='inkspace-1__rect1' style='fill:currentColor;stroke-width:0;stroke-linecap:square;paint-order:markers stroke fill'/>
+          <path d='M 5.6243532,4.601212 A 1.0231411,1.0231411 0 0 1 4.601212,5.6243532 1.0231411,1.0231411 0 0 1 3.5780709,4.601212 1.0231411,1.0231411 0 0 1 4.601212,3.5780709 1.0231411,1.0231411 0 0 1 5.6243532,4.601212 Z' id='inkspace-1__path1' style='fill:currentColor;stroke-width:0;stroke-linecap:square;paint-order:markers stroke fill'/>
+        </g></g>
+    size: 24
+  loading:
+    source: lucide/loader-circle
+    digest: 3f7e74428dd8b048
+    multicolor: false
+    warnings: []
+    body: "<path d='M21 12a9 9 0 1 1-6.219-8.56' fill='none' stroke='currentColor'
+      stroke-linecap='round' stroke-linejoin='round' stroke-width='2'/>"
+    size: 24
+  logo:
+    source: local/logo
+    digest: e176bedc59bf9681
+    multicolor: true
+    warnings: []
+    body: |-
+      <g transform="translate(0 0) scale(0.0886) translate(-0 -0)"><defs id='logo__defs1'>
+          <linearGradient id='logo__path1' x1='0' x2='1' y1='0' y2='1'>
+            <stop id='logo__stop1' offset='0' stop-color='#5b8def'/>
+            <stop id='logo__stop2' offset='1' stop-color='#c8106a'/>
+          </linearGradient>
+        </defs>
+        <g id='logo__layer1'>
+          <rect fill='url(#logo__path1)' height='230' id='logo__rect1' rx='48' width='230' x='20' y='20'/>
+          <path d='M 90,175 135,80 180,175 Z' fill='#ffffff' id='logo__path2'/>
+        </g></g>
+    size: 24
+  logomark:
+    source: local/logomark
+    digest: 9f0738b1e28fd83d
+    multicolor: true
+    warnings: []
+    body: |-
+      <g transform="translate(0 0) scale(0.1772) translate(-0 -0)"><defs id='logomark__defs1'>
+          <linearGradient id='logomark__path1' x1='0' x2='0' y1='0' y2='1'>
+            <stop id='logomark__stop1' offset='0' stop-color='#c8106a'/>
+            <stop id='logomark__stop2' offset='1' stop-color='#7a0a41'/>
+          </linearGradient>
+        </defs>
+        <g id='logomark__layer1'>
+          <circle cx='67.7' cy='67.7' fill='url(#logomark__path1)' id='logomark__path2' r='52'/>
+        </g></g>
+    size: 24
+  logout:
+    source: material-symbols/logout
+    digest: f3fa600ca3338459
+    multicolor: false
+    warnings: []
+    body: "<path d='M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h7v2H5v14h7v2zm11-4l-1.375-1.45l2.55-2.55H9v-2h8.175l-2.55-2.55L16
+      7l5 5z' fill='currentColor'/>"
+    size: 24
+  mail:
+    source: material-symbols/mail
+    digest: f623e75012bd7ef3
+    multicolor: false
+    warnings: []
+    body: "<path d='M4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0
+      1.413.588T22 6v12q0 .825-.587 1.413T20 20zm8-7l8-5V6l-8 5l-8-5v2z' fill='currentColor'/>"
+    size: 24
+  menu:
+    source: material-symbols/menu
+    digest: a2df0afb799a2ad8
+    multicolor: false
+    warnings: []
+    body: "<path d='M3 18v-2h18v2zm0-5v-2h18v2zm0-5V6h18v2z' fill='currentColor'/>"
+    size: 24
+  nav.menu:
+    source: material-symbols/menu
+    digest: a2df0afb799a2ad8
+    multicolor: false
+    warnings: []
+    body: "<path d='M3 18v-2h18v2zm0-5v-2h18v2zm0-5V6h18v2z' fill='currentColor'/>"
+    size: 24
+  notify:
+    source: material-symbols/notifications
+    digest: 5ec18cab8db321af
+    multicolor: false
+    warnings: []
+    body: "<path d='M4 19v-2h2v-7q0-2.075 1.25-3.687T10.5 4.2v-.7q0-.625.438-1.062T12
+      2t1.063.438T13.5 3.5v.7q2 .5 3.25 2.113T18 10v7h2v2zm8 3q-.825 0-1.412-.587T10
+      20h4q0 .825-.587 1.413T12 22' fill='currentColor'/>"
+    size: 24
+  profile:
+    source: material-symbols/person
+    digest: 904c422211bf8c31
+    multicolor: false
+    warnings: []
+    body: "<path d='M9.175 10.825Q8 9.65 8 8t1.175-2.825T12 4t2.825 1.175T16 8t-1.175
+      2.825T12 12t-2.825-1.175M4 20v-2.8q0-.85.438-1.562T5.6 14.55q1.55-.775 3.15-1.162T12
+      13t3.25.388t3.15 1.162q.725.375 1.163 1.088T20 17.2V20z' fill='currentColor'/>"
+    size: 24
+  refresh:
+    source: lucide/refresh-cw
+    digest: f9cd974ee0f39cef
+    multicolor: false
+    warnings: []
+    body: "<g fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round'
+      stroke-width='2'><path d='M3 12a9 9 0 0 1 9-9a9.75 9.75 0 0 1 6.74 2.74L21 8'/><path
+      d='M21 3v5h-5m5 4a9 9 0 0 1-9 9a9.75 9.75 0 0 1-6.74-2.74L3 16'/><path d='M8
+      16H3v5'/></g>"
+    size: 24
+  save:
+    source: lucide/save
+    digest: cd6587a87ffc4453
+    multicolor: false
+    warnings: []
+    body: "<g fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round'
+      stroke-width='2'><path d='M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2
+      2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z'/><path d='M17 21v-7a1 1 0 0 0-1-1H8a1
+      1 0 0 0-1 1v7M7 3v4a1 1 0 0 0 1 1h7'/></g>"
+    size: 24
+  search:
+    source: lucide/search
+    digest: 1effe3b08fe0a17a
+    multicolor: false
+    warnings: []
+    body: "<g fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round'
+      stroke-width='2'><path d='m21 21l-4.34-4.34'/><circle cx='11' cy='11' r='8'/></g>"
+    size: 24
+  settings:
+    source: material-symbols/settings
+    digest: db5624f476a45167
+    multicolor: false
+    warnings: []
+    body: "<path d='m9.25 22l-.4-3.2q-.325-.125-.612-.3t-.563-.375L4.7 19.375l-2.75-4.75l2.575-1.95Q4.5
+      12.5 4.5 12.338v-.675q0-.163.025-.338L1.95 9.375l2.75-4.75l2.975 1.25q.275-.2.575-.375t.6-.3l.4-3.2h5.5l.4
+      3.2q.325.125.613.3t.562.375l2.975-1.25l2.75 4.75l-2.575 1.95q.025.175.025.338v.674q0
+      .163-.05.338l2.575 1.95l-2.75 4.75l-2.95-1.25q-.275.2-.575.375t-.6.3l-.4 3.2zm2.8-6.5q1.45
+      0 2.475-1.025T15.55 12t-1.025-2.475T12.05 8.5q-1.475 0-2.488 1.025T8.55 12t1.013
+      2.475T12.05 15.5' fill='currentColor'/>"
+    size: 24
+  spinner:
+    source: local/spinner
+    digest: 004d9fde91e7c6d3
+    multicolor: false
+    warnings: []
+    body: "<path d='M12 2a10 10 0 1 1-10 10h2a8 8 0 1 0 8-8Z' fill='currentColor'/>"
+    size: 24
+  success:
+    source: material-symbols/check-circle
+    digest: 34d130ed2616baee
+    multicolor: false
+    warnings: []
+    body: "<path d='m10.6 16.6l7.05-7.05l-1.4-1.4l-5.65 5.65l-2.85-2.85l-1.4 1.4zM12
+      22q-2.075 0-3.9-.788t-3.175-2.137T2.788 15.9T2 12t.788-3.9t2.137-3.175T8.1 2.788T12
+      2t3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175 2.138T12
+      22' fill='currentColor'/>"
+    size: 24
+  upload:
+    source: material-symbols/upload
+    digest: 15651e45cc189f1c
+    multicolor: false
+    warnings: []
+    body: "<path d='M11 16V7.85l-2.6 2.6L7 9l5-5l5 5l-1.4 1.45l-2.6-2.6V16zm-5 4q-.825
+      0-1.412-.587T4 18v-3h2v3h12v-3h2v3q0 .825-.587 1.413T18 20z' fill='currentColor'/>"
+    size: 24
+  warning:
+    source: material-symbols/warning
+    digest: e7712af45881e76a
+    multicolor: false
+    warnings: []
+    body: "<path d='M1 21L12 2l11 19zm11.713-3.287Q13 17.425 13 17t-.288-.712T12 16t-.712.288T11
+      17t.288.713T12 18t.713-.288M11 15h2v-5h-2z' fill='currentColor'/>"
+    size: 24
+  watermark:
+    source: local/watermark
+    digest: 76816c5d78f44138
+    multicolor: false
+    warnings: []
+    body: |-
+      <g transform="translate(0 0) scale(0.0886) translate(-0 -0)"><g id='watermark__layer1'>
+          <path d='M79 34h113v34h-79v45h68v34h-68v90h-34z' fill='currentColor' id='watermark__path1'/>
+        </g></g>
+    size: 24

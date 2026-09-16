@@ -46,6 +46,24 @@ module Fontico
     def manifest      = @manifest ||= Manifest.load(*load_path)
     def sprite_file   = File.join(root, output_dir, "icons.svg")
 
+    # Rendered markup for bare icon() calls, minus the sprite path. Keyed by
+    # name and bounded by the manifest, so it cannot grow with traffic.
+    def icon_cache = @icon_cache ||= {}
+
+    # Inline mode embeds the sprite in every response, and it used to be
+    # re-read off disk on every call: 13us and a fresh 10KB string per
+    # request, more than a whole page of icon() calls costs. Held instead,
+    # behind a stat, which is cheap next to the read and means a rebuild from
+    # anywhere — the dev watcher, or `rake fontico:build` in another terminal
+    # — is picked up without waiting for a reset!.
+    def sprite_markup
+      stamp = File.stat(sprite_file).then { [_1.mtime, _1.size] }
+      return @sprite_markup if @sprite_stamp == stamp
+
+      @sprite_stamp = stamp
+      @sprite_markup = File.read(sprite_file).freeze
+    end
+
     # Rails engines that ship config/icons.yml (or icons.yml at the gem
     # root), then the app's file. The app is last on purpose.
     def discover(app)
@@ -117,7 +135,12 @@ module Fontico
     end
 
     def glyph(name) = [codepoint(name)].pack("U")
-    def reset!        = (@manifest = @build_error = @missing_icons = nil)
+    # Drops everything derived from a build. The dev watcher calls this after
+    # every rebuild, which is what keeps the caches above honest.
+    def reset!
+      @manifest = @build_error = @missing_icons = nil
+      @icon_cache = @sprite_markup = @sprite_stamp = nil
+    end
 
     def configure = yield(self)
   end

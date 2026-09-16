@@ -121,7 +121,11 @@ reflexively.
 
 ## Also noted
 
-- `icons_sprite` re-reads the sprite off disk on every call
-  ([helper.rb:55](lib/fontico/helper.rb#L55)) — no caching. Only matters in
-  `inline_sprite` mode, where it's ~27KB per request.
 - `woff2` target still declared-but-skipped (see README Status).
+
+## Done
+
+- `icons_sprite` re-read the sprite off disk on every call. It is held in
+  memory now, behind a stat, and dropped by `Fontico.reset!`. It was 20.8µs
+  and a fresh copy of the file per request in `inline_sprite` mode — more
+  than a whole page of `icon()` calls cost.

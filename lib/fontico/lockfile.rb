@@ -41,15 +41,28 @@ module Fontico
 
     def entry(name) = @entries[name]
 
-    def store(name, source:, body:, multicolor: false, warnings: [])
+    # +size+ is the grid the body was refit to. It is recorded because it is
+    # an input to the body, not a property of the request for it — see #fresh?.
+    def store(name, source:, body:, size:, multicolor: false, warnings: [])
       @entries[name] = {
         "source"     => source,
+        "size"       => size,
         "digest"     => Digest::SHA256.hexdigest(body)[0, 16],
         "multicolor" => multicolor,
         "warnings"   => warnings,
         "body"       => body
       }
       allocate(name)
+    end
+
+    # A lock written before sizes were recorded cannot say what grid its
+    # bodies were refit to. Taking them at the size now in the manifest costs
+    # nothing when it is right, and `rake fontico:update` fixes it when it is
+    # not. The alternative — calling every body stale — would re-fetch a whole
+    # manifest on a gem upgrade, and put a network round trip in the first
+    # deploy after it.
+    def assume_size(size)
+      @entries.each_value { _1["size"] ||= size }
     end
 
     # Names present in the lock but absent from the manifest keep their
@@ -61,8 +74,28 @@ module Fontico
       end
     end
 
-    def fresh?(name, source)
-      entry(name)&.fetch("source", nil) == source && entry(name)["body"]
+    # A cached body is only reusable if every input that produced it still
+    # holds. The source is the obvious one; the other two were the bug.
+    #
+    #   size        the body carries its refit baked in as a <g transform>,
+    #               while the sprite emitter reads the target size live. Keyed
+    #               on the source alone, changing `defaults: size:` moved every
+    #               <symbol> to the new viewBox and left the geometry inside
+    #               fit to the old grid — every icon a fraction of its size in
+    #               the corner of its box, on a page that 200s. Local files are
+    #               re-read every build and self-heal, so this only ever showed
+    #               on cached remotes: most of a real manifest.
+    #
+    #   multicolor  the *override* from the manifest, not the detected result.
+    #               When one is set the result always equals it, so the stored
+    #               result is the record of whether this body was preprocessed
+    #               under it. Nil leaves detection in charge, and detection on
+    #               an unchanged body gives an unchanged answer.
+    def fresh?(name, source, size:, multicolor: nil)
+      e = entry(name)
+      return false unless e && e["body"] && e["source"] == source && e["size"] == size
+
+      multicolor.nil? || e["multicolor"] == multicolor
     end
 
     def body(name) = entry(name)&.fetch("body", nil)
