@@ -67,10 +67,13 @@ if Rake::Task.task_defined?("assets:clobber")
 end
 
 namespace :fontico do
+  # Only what lands in output_dir. A target given an explicit path in the
+  # manifest is pointing somewhere the app owns — a firmware include/ that is
+  # very likely committed — and deleting that is not precompile's business.
   desc "Remove generated icon artifacts (icons.lock is kept: it is source)"
   task :clobber do
     require "fontico"
-    %w[icons.svg icons.css icons.ttf].each do |name|
+    %w[icons.svg icons.css icons.ttf icons.h icons_font.h].each do |name|
       path = File.join(Fontico.root, Fontico.output_dir, name)
       File.delete(path) if File.exist?(path)
     end

@@ -120,9 +120,18 @@ module Fontico
 
       targets = @manifest.targets - PENDING
       targets += ["css"] if targets.include?("sprite") && !targets.include?("css")
+      # Both C targets lean on the font: the header is a map into it, and the
+      # gfxfont is rasterised out of it. Same implication as sprite -> css.
+      needs_font = targets.include?("c") || targets.include?("gfxfont")
+      targets += ["ttf"] if needs_font && !targets.include?("ttf")
+      # And the gfxfont reads the .ttf off disk, so it has to run after it.
+      targets = targets.partition { _1 != "gfxfont" }.flatten
 
       targets.each do |target|
-        path = File.join(@output, filename_for(target))
+        path = path_for(target)
+        # Before the emitter runs, not after it returns: a font target writes
+        # its own file through Node and needs the directory already there.
+        FileUtils.mkdir_p(File.dirname(path))
         emitter = emitter_for(target, [], path: path)
 
         accepted = icons.select { emitter.accepts?(_1) }
@@ -139,12 +148,29 @@ module Fontico
       [written, skipped]
     end
 
+    # An explicit path in the manifest wins, so a firmware header can land in
+    # the device's include/ directory instead of among the web artifacts.
+    #
+    # Always absolute: a font target hands its path to Node, which runs from
+    # its own toolchain directory and cannot resolve a relative one.
+    def path_for(target)
+      override = @manifest.target_path(target)
+      return File.expand_path(override, @root) if override
+
+      File.expand_path(filename_for(target), @output)
+    end
+
     def emitter_for(target, build = [], path: nil)
       case target
       when "sprite" then Emitters::Sprite.new(@manifest, build)
       when "css"    then Emitters::Stylesheet.new(@manifest, build)
       when "ttf"    then Emitters::Font.new(@manifest, build, lock: @lock, output: path)
-      else raise Error, "unknown target #{target.inspect} (have: sprite, ttf)"
+      when "c"      then Emitters::Header.new(@manifest, build, lock: @lock)
+      when "gfxfont"
+        opts = @manifest.target_options(target)
+        Emitters::GfxFont.new(@manifest, build, lock: @lock, ttf: path_for("ttf"),
+                                                size: (opts["size"] || 24).to_i)
+      else raise Error, "unknown target #{target.inspect} (have: sprite, ttf, c, gfxfont)"
       end
     end
 
@@ -152,7 +178,9 @@ module Fontico
       case target
       when "sprite" then "icons.svg"
       when "css"    then "icons.css"
-      when "ttf"    then "icons.ttf"
+      when "ttf"     then "icons.ttf"
+      when "c"       then "icons.h"
+      when "gfxfont" then "icons_font.h"
       else raise Error, "unknown target #{target.inspect}"
       end
     end

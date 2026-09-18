@@ -21,11 +21,8 @@ module Fontico
       # the markup either side of the href and the path is still resolved per
       # call. Fontico.reset! drops the cache, which the dev watcher already
       # calls after every rebuild.
-      pair = if size.nil? && variant.nil? && options.empty?
-               Fontico.icon_cache[key] ||= halves(key)
-             else
-               halves(key, size: size, **options)
-             end
+      bare = size.nil? && variant.nil? && options.empty?
+      pair = bare ? Fontico.icon_cache[key] ||= halves(key) : halves(key, size: size, **options)
       return missing(name) if pair.nil?
 
       safe("#{pair[0]}#{sprite_path(variant)}#{pair[1]}")

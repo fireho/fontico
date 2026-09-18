@@ -28,6 +28,8 @@ app — or surviving an upstream rename — is a diff in one file.
 | **361ms cold, 2ms warm** | measured on 35 icons across two remote providers and five local files               |
 | **No Node, no npm**      | the sprite target is pure Ruby; deploys rebuild offline from the lockfile           |
 | **Also PDFs**            | a real TTF for Prawn, with pinned codepoints                                        |
+| **Also firmware**        | `icons.h` for C/C++, same names, 7KB of font instead of 357KB                        |
+| **Also bare metal**      | a `GFXfont` compiled in — 11KB for 221 icons, no renderer, no filesystem            |
 
 ## Install
 
@@ -239,6 +241,103 @@ build names each one it dropped.
 Font targets need Node, installed on demand into `~/.cache/fontico`. A manifest
 with `targets: [sprite]` never touches it and stays pure Ruby.
 
+## Firmware, and C
+
+The `c` target emits `icons.h`, so a device names icons by intent like every
+other consumer. It draws them out of the same TTF, which is why `c` implies
+`ttf` the way `sprite` implies `css`.
+
+`targets:` takes a mapping when an artifact belongs somewhere specific — a
+firmware header goes in the device's `include/`, not in `app/assets/builds`
+next to the web files:
+
+```yaml
+targets:
+  sprite:                                 # default location
+  ttf:  devs/esplay/data/icons.ttf
+  c:    devs/esplay/include/icons.h
+```
+
+```c
+#include "icons.h"
+
+display.drawIcon(ICON_WIFI, 86, 5, COLOR_WHITE, 20);   /* "\xEE\x80\x81" */
+```
+
+The UTF-8 bytes are literals decided at build time, so nothing parses
+`"U+e63e"` or builds a `String` on the heap inside a draw loop. For an icon
+named at runtime rather than compiled in — arriving in an MQTT payload, say —
+the header also carries a name-sorted table:
+
+```c
+#define FONTICO_ICONS_IMPLEMENTATION   /* in exactly one translation unit */
+#include "icons.h"
+
+const char *glyph = fontico_icon(payload["icon"]);   /* NULL if unknown */
+```
+
+Two reasons this is a better deal than a vendor icon font on the device:
+
+- **Size.** The font carries only the icons your manifest names. 35 icons
+  build a 7KB TTF, against the 357KB an unsubsetted Material Symbols drop-in
+  costs — and flash is the budget that actually binds.
+- **Codepoints that cannot move.** They are pinned append-only in
+  `icons.lock`, which matters more here than anywhere else: a codepoint
+  compiled into a flashed image cannot be hotfixed. If adding an icon
+  renumbered the others, every board in the field would draw the wrong
+  picture after an OTA.
+
+Names become macros — `nav.menu` is `ICON_NAV_MENU`. Two names that fold to
+the same macro are refused rather than silently redefined, and non-ASCII
+names are refused too: the table is sorted here and `bsearch`ed there, and a
+byte above `0x7F` orders the other way under a signed `char`.
+
+Multicolour icons are left out, the same as they are left out of the font —
+there would be no glyph behind the codepoint. The build names each one.
+
+### `gfxfont`: no font renderer on the device at all
+
+The `c` target still needs something on the device that can read a TTF. The
+`gfxfont` target removes that: it emits an Adafruit `GFXfont` — 1-bit bitmaps
+and a glyph table, compiled straight into the binary. No FreeType, no
+OpenFontRender, no filesystem partition to flash. `Adafruit_GFX` and
+`Arduino_GFX` both take it as-is:
+
+```yaml
+targets:
+  sprite:
+  gfxfont:
+    path: devs/include/icons_font.h
+    size: 24
+```
+
+```c
+#include <Arduino_GFX_Library.h>
+#include "icons_font.h"
+
+gfx->setFont(&fontico_icons24);
+gfx->drawChar(x, y, ICON_WIFI, fg, bg, 1);
+```
+
+221 icons at 24px come to **9,961 bytes of bitmap** plus a 1,547-byte glyph
+table — about 11KB for the set, against 357KB for an unsubsetted vendor font
+on a filesystem. Bitmaps are rasterised out of the TTF fontico already
+builds, not from the SVGs, so they inherit the same normalised geometry the
+PDF uses instead of drifting from it through a second pipeline.
+
+Two things follow from the format. A `GFXfont` is **fixed size**, so ask for
+the size you will draw at rather than scaling one up. And it is indexed off a
+byte, so it holds 224 icons; past that the build says so and points you at the
+`c` target, which addresses codepoints directly. The char codes are positional
+for that reason, which is why they and the bitmaps are emitted into one file —
+they cannot disagree. Their order follows the append-only codepoints in
+`icons.lock`, so adding an icon appends instead of renumbering what is already
+flashed.
+
+At one bit deep, thin strokes fall through the threshold at small sizes. An
+icon that rasterises to nothing is refused rather than shipped as an icon that
+draws as nothing.
+
 ## How it compares
 
 |                              | vendor gems (`lucide-rails`, `heroicon`) | `iconify-icon` web component   | fontico               |
@@ -255,6 +354,8 @@ with `targets: [sprite]` never touches it and stays pure Ruby.
 
 - ✅ Manifest, resolver, preprocessor, lockfile, sprite emitter, Rails helper
 - ✅ TTF emitter with glyph extraction, codepoint API, Prawn helpers
+- ✅ `c` target: `icons.h` for firmware, with per-target output paths
+- ✅ `gfxfont` target: 1-bit bitmaps compiled in, for Adafruit_GFX / Arduino_GFX
 - ⏳ `woff2` — declared targets are skipped with a notice
 - ⏳ `variant:` — accepted and ignored by the helper; see [TODO.md](TODO.md)
 

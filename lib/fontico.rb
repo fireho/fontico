@@ -23,6 +23,8 @@ module Fontico
     autoload :Sprite,     "fontico/emitters/sprite"
     autoload :Font,       "fontico/emitters/font"
     autoload :Stylesheet, "fontico/emitters/stylesheet"
+    autoload :Header,     "fontico/emitters/header"
+    autoload :GfxFont,    "fontico/emitters/gfx_font"
   end
 
   class << self

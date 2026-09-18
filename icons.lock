@@ -131,6 +131,7 @@ icons:
     size: 24
   empty-box:
     source: local/empty-box
+    size: 24
     digest: '0549677d700ca2e8'
     multicolor: false
     warnings: []
@@ -138,7 +139,6 @@ icons:
       <g transform="translate(0 0) scale(0.25) translate(-0 -0)"><g id='empty-box__layer1'>
           <path d='M12 28 48 12l36 16v40L48 84 12 68Zm36 8 24-10-24-10-24 10Z' fill='currentColor' id='empty-box__path1'/>
         </g></g>
-    size: 24
   error:
     source: material-symbols/error
     digest: c810905d741d99c1
@@ -202,6 +202,7 @@ icons:
     size: 24
   inkspace-1:
     source: local/inkspace-1
+    size: 24
     digest: 4fe7f04866a269b2
     multicolor: false
     warnings: []
@@ -210,7 +211,6 @@ icons:
           <path d='M 0.72496861,0.72496855 H 3.4611403 V 3.5196053 H 0.72496861 Z' id='inkspace-1__rect1' style='fill:currentColor;stroke-width:0;stroke-linecap:square;paint-order:markers stroke fill'/>
           <path d='M 5.6243532,4.601212 A 1.0231411,1.0231411 0 0 1 4.601212,5.6243532 1.0231411,1.0231411 0 0 1 3.5780709,4.601212 1.0231411,1.0231411 0 0 1 4.601212,3.5780709 1.0231411,1.0231411 0 0 1 5.6243532,4.601212 Z' id='inkspace-1__path1' style='fill:currentColor;stroke-width:0;stroke-linecap:square;paint-order:markers stroke fill'/>
         </g></g>
-    size: 24
   loading:
     source: lucide/loader-circle
     digest: 3f7e74428dd8b048
@@ -221,6 +221,7 @@ icons:
     size: 24
   logo:
     source: local/logo
+    size: 24
     digest: e176bedc59bf9681
     multicolor: true
     warnings: []
@@ -235,9 +236,9 @@ icons:
           <rect fill='url(#logo__path1)' height='230' id='logo__rect1' rx='48' width='230' x='20' y='20'/>
           <path d='M 90,175 135,80 180,175 Z' fill='#ffffff' id='logo__path2'/>
         </g></g>
-    size: 24
   logomark:
     source: local/logomark
+    size: 24
     digest: 9f0738b1e28fd83d
     multicolor: true
     warnings: []
@@ -251,7 +252,6 @@ icons:
         <g id='logomark__layer1'>
           <circle cx='67.7' cy='67.7' fill='url(#logomark__path1)' id='logomark__path2' r='52'/>
         </g></g>
-    size: 24
   logout:
     source: material-symbols/logout
     digest: f3fa600ca3338459
@@ -342,11 +342,11 @@ icons:
     size: 24
   spinner:
     source: local/spinner
+    size: 24
     digest: 004d9fde91e7c6d3
     multicolor: false
     warnings: []
     body: "<path d='M12 2a10 10 0 1 1-10 10h2a8 8 0 1 0 8-8Z' fill='currentColor'/>"
-    size: 24
   success:
     source: material-symbols/check-circle
     digest: 34d130ed2616baee
@@ -375,6 +375,7 @@ icons:
     size: 24
   watermark:
     source: local/watermark
+    size: 24
     digest: 76816c5d78f44138
     multicolor: false
     warnings: []
@@ -382,4 +383,3 @@ icons:
       <g transform="translate(0 0) scale(0.0886) translate(-0 -0)"><g id='watermark__layer1'>
           <path d='M79 34h113v34h-79v45h68v34h-68v90h-34z' fill='currentColor' id='watermark__path1'/>
         </g></g>
-    size: 24

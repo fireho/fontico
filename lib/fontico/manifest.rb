@@ -11,7 +11,7 @@ module Fontico
     # Where local/ SVGs live when the manifest doesn't say otherwise.
     LOCAL_PATH = "app/assets/icons"
 
-    attr_reader :path, :defaults, :providers, :targets, :icons
+    attr_reader :path, :defaults, :providers, :targets, :target_paths, :icons
 
     def self.load(*paths)
       paths = paths.flatten.compact.select { File.file?(_1) }
@@ -40,10 +40,17 @@ module Fontico
       @path      = path
       @defaults  = data["defaults"]  || {}
       @providers = data["providers"] || {}
-      @targets   = data["targets"]   || ["sprite"]
+      @targets, @target_paths = parse_targets(data["targets"])
       @icons     = flatten(data["icons"] || {}).freeze
       validate!
     end
+
+    # Where a target's artifact goes, relative to the root, or nil to take the
+    # default name in output_dir.
+    def target_path(target) = target_options(target)["path"]
+
+    # Anything else the target was given in the manifest, e.g. a gfxfont size.
+    def target_options(target) = target_paths.fetch(target.to_s, {})
 
     def default_provider = defaults.fetch("provider", "lucide")
     def local_path       = providers.dig("local", "path") || LOCAL_PATH
@@ -66,6 +73,41 @@ module Fontico
     def local_icons = icons.select(&:local?)
 
     private
+
+    # A list names the targets and each takes its default filename inside
+    # output_dir. A mapping also says where one goes, which is what firmware
+    # needs: icons.h belongs in the device's include/ directory, not in
+    # app/assets/builds next to the web artifacts. A target with more to say
+    # than a path takes a block instead.
+    #
+    #   targets: [sprite, ttf]
+    #
+    #   targets:
+    #     sprite:                                   # default location
+    #     ttf:  devs/data/icons.ttf                 # just a path
+    #     gfxfont:                                  # a path and a size
+    #       path: devs/include/icons_font.h
+    #       size: 24
+    def parse_targets(value)
+      case value
+      when nil   then [["sprite"], {}]
+      when Array then [value.map(&:to_s), {}]
+      when Hash
+        [value.keys.map(&:to_s),
+         value.compact.to_h { [_1.to_s, target_settings(_1, _2)] }]
+      else
+        raise Error, "targets: must be a list or a mapping, got #{value.class}"
+      end
+    end
+
+    def target_settings(target, value)
+      case value
+      when String then { "path" => value }
+      when Hash   then value.to_h { [_1.to_s, _2] }
+      else
+        raise Error, "targets: #{target} must be a path or a mapping, got #{value.class}"
+      end
+    end
 
     def index = @index ||= icons.to_h { [_1.name, _1] }
 

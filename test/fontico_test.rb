@@ -6,12 +6,14 @@
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
 require "minitest/autorun"
+require "open3"
 require "tmpdir"
 require "fileutils"
 # The suite writes manifests directly. Fontico::Manifest is autoloaded, so it
 # is the thing that pulls in yaml — and only once some test touches it. Under
 # a random order that is not guaranteed, so ask for it here.
 require "yaml"
+require "ttfunk"
 require "fontico"
 
 # Builder constructs its own Resolver, so a test that needs to see what came
@@ -898,6 +900,576 @@ class FontEmitterTest < Minitest::Test
                                     lock: lock, output: File.join(dir, "icons.ttf")).call
       end
       assert_nil lock.codepoint_for("save")
+    end
+  end
+end
+
+# A C header naming icons for firmware. Verified against a real compiler in
+# test/c/ — these cover the generation side: the mangling, the byte values,
+# and the invariants the device silently depends on.
+class HeaderEmitterTest < Minitest::Test
+  def build(icons, multicolor: {})
+    m = Fontico::Manifest.new(
+      { "targets" => { "c" => nil }, "providers" => { "lucide" => {}, "local" => {} },
+        "icons" => icons }
+    )
+    Dir.mktmpdir do |dir|
+      lock = Fontico::Lockfile.new(File.join(dir, "icons.lock"))
+      m.icons.each do |icon|
+        lock.store(icon.name, source: icon.source, body: "<path/>", size: 24,
+                   multicolor: multicolor.fetch(icon.name, false))
+      end
+      pairs = m.icons.select { Fontico::Emitters::Header.new(m, [], lock: lock).accepts?(_1) }
+                     .map { [_1, "<path/>"] }
+      yield Fontico::Emitters::Header.new(m, pairs, lock: lock), lock
+    end
+  end
+
+  def header(icons, multicolor: {})
+    out = nil
+    build(icons, multicolor: multicolor) { |e, _| out = e.call }
+    out
+  end
+
+  def test_dotted_and_dashed_names_become_c_identifiers
+    h = header({ "save" => "lucide/save", "nav" => { "menu" => "lucide/menu" },
+                 "empty-box" => "lucide/box" })
+
+    assert_includes h, "#define ICON_SAVE "
+    assert_includes h, "#define ICON_NAV_MENU "
+    assert_includes h, "#define ICON_EMPTY_BOX "
+  end
+
+  # The device does no parsing and no String building: the bytes are decided
+  # here. U+E001 is EE 80 81, and every byte is a \x escape, so C's greedy hex
+  # escapes have nothing extra to swallow.
+  def test_codepoints_are_emitted_as_utf8_escapes
+    assert_equal "\\xEE\\x80\\x81", Fontico::Emitters::Header.utf8_literal(0xE001)
+    assert_equal "\\xEF\\xA3\\xBF", Fontico::Emitters::Header.utf8_literal(0xF8FF)
+    assert_includes header({ "save" => "lucide/save" }), %(#define ICON_SAVE "\\xEE\\x80\\x81")
+  end
+
+  # The escapes have to say the same thing Ruby would, or the glyph the device
+  # draws is not the glyph the sprite draws.
+  def test_the_escapes_decode_back_to_the_pinned_codepoint
+    literal = Fontico::Emitters::Header.utf8_literal(0xE00A)
+    bytes = literal.scan(/\\x(\h\h)/).flatten.map { _1.to_i(16) }
+    assert_equal 0xE00A, bytes.pack("C*").force_encoding("UTF-8").ord
+  end
+
+  # The header is a map into icons.ttf. If it named a codepoint the font has no
+  # glyph for, the device would draw an invisible box on a screen nobody is
+  # watching over the wire.
+  def test_codepoints_agree_with_the_lockfile
+    build({ "save" => "lucide/save", "wifi" => "lucide/wifi" }) do |emitter, lock|
+      out = emitter.call
+      %w[save wifi].each do |name|
+        cp = lock.codepoint_for(name)
+        assert_includes out, format("U+%04X", cp)
+        assert_includes out, format("0x%04X", cp)
+      end
+    end
+  end
+
+  # C takes the second #define of a macro and says nothing.
+  def test_names_that_collide_as_identifiers_are_refused
+    err = assert_raises(Fontico::Error) do
+      header({ "nav" => { "menu" => "lucide/menu" }, "nav-menu" => "lucide/menu" })
+    end
+    assert_match(/collide as C identifiers/, err.message)
+    assert_match(/ICON_NAV_MENU/, err.message)
+    assert_match(/nav\.menu/, err.message)
+    assert_match(/nav-menu/, err.message)
+  end
+
+  # Sorted here with Ruby's <=>, searched there with strcmp. A byte over 0x7F
+  # orders the other way under a signed char, so bsearch would miss it.
+  def test_non_ascii_names_are_refused
+    err = assert_raises(Fontico::Error) { header({ "café" => "lucide/coffee" }) }
+    assert_match(/needs ASCII icon names/, err.message)
+    assert_match(/café/, err.message)
+  end
+
+  # bsearch is only legal on a sorted table.
+  def test_the_lookup_table_is_sorted_by_name
+    h = header({ "wifi" => "lucide/wifi", "alpha" => "lucide/a", "mid" => "lucide/m" })
+    names = h.scan(/^\s+\{ "([^"]+)",/).flatten
+
+    refute_empty names
+    assert_equal names.sort, names
+  end
+
+  def test_the_count_matches_the_table
+    h = header({ "a" => "lucide/a", "b" => "lucide/b", "c" => "lucide/c" })
+    assert_includes h, "#define FONTICO_ICON_COUNT 3"
+    assert_equal 3, h.scan(/^\s+\{ "/).size
+  end
+
+  # A glyph stores no colour, so the font drops multicolour icons — and a
+  # header naming one would point at a codepoint with nothing behind it.
+  def test_multicolour_icons_are_left_out_like_the_font_leaves_them_out
+    h = header({ "flat" => "lucide/flat", "brand" => "local/brand" },
+               multicolor: { "brand" => true })
+
+    assert_includes h, "ICON_FLAT"
+    refute_includes h, "ICON_BRAND"
+    assert_includes h, "#define FONTICO_ICON_COUNT 1"
+  end
+
+  # Emitting must never mint a codepoint: the builder has already save!d the
+  # lock, so one invented here would reach the firmware without reaching disk.
+  def test_an_icon_with_no_codepoint_refuses_to_emit
+    m = Fontico::Manifest.new(
+      { "targets" => { "c" => nil }, "providers" => { "lucide" => {} },
+        "icons" => { "save" => "lucide/save" } }
+    )
+    Dir.mktmpdir do |dir|
+      lock = Fontico::Lockfile.new(File.join(dir, "icons.lock"))
+      err = assert_raises(Fontico::Error) do
+        Fontico::Emitters::Header.new(m, [[m.icons.first, "<path/>"]], lock: lock).call
+      end
+      assert_match(/save has no codepoint in icons.lock/, err.message)
+      assert_nil lock.codepoint_for("save"), "the raise must not have allocated"
+    end
+  end
+
+  def test_the_header_is_include_guarded_and_c_plus_plus_safe
+    h = header({ "save" => "lucide/save" })
+    assert_includes h, "#ifndef FONTICO_ICONS_H"
+    assert_includes h, %(extern "C")
+    # One translation unit owns the table; the rest link against it.
+    assert_includes h, "#ifdef FONTICO_ICONS_IMPLEMENTATION"
+    assert_includes h, "extern const FonticoIcon fontico_icons"
+  end
+end
+
+# The header can be structurally perfect and still not compile, and the
+# device is the last place you want to find that out. So this one runs a real
+# compiler over it: two translation units, -Werror, and it checks the bytes
+# and the lookup at runtime. Skipped where there is no cc.
+class HeaderCompilesTest < Minitest::Test
+  ICONS = { "save" => "lucide/save", "nav" => { "menu" => "lucide/menu" },
+            "empty-box" => "lucide/box", "wifi" => "lucide/wifi" }.freeze
+
+  # Deliberately not a bare `assert`: the point is to exercise the generated
+  # header the way firmware does, including the implementation guard.
+  MAIN = <<~'CSRC'
+    #define FONTICO_ICONS_IMPLEMENTATION
+    #include "icons.h"
+    #include <stdio.h>
+    #include <string.h>
+
+    const char *other_lookup(const char *name);
+    static int fails = 0;
+
+    static void want(const char *what, const char *got, const char *expected) {
+      if (got && strcmp(got, expected) == 0) return;
+      printf("FAIL %s\n", what);
+      fails++;
+    }
+
+    int main(void) {
+      int i;
+      /* Compile-time UTF-8: three bytes, no parsing, no heap. */
+      want("ICON_SAVE bytes", ICON_SAVE, "\xEE\x80\x81");
+      want("ICON_NAV_MENU bytes", ICON_NAV_MENU, "\xEE\x80\x82");
+      if (strlen(ICON_SAVE) != 3) { printf("FAIL ICON_SAVE length\n"); fails++; }
+
+      /* Runtime lookup, for a name arriving over the wire. */
+      want("lookup save", fontico_icon("save"), ICON_SAVE);
+      want("lookup nav.menu", fontico_icon("nav.menu"), ICON_NAV_MENU);
+      want("lookup empty-box", fontico_icon("empty-box"), ICON_EMPTY_BOX);
+
+      /* bsearch must find every entry, or some icons are silently invisible. */
+      for (i = 0; i < FONTICO_ICON_COUNT; i++) {
+        if (fontico_icon(fontico_icons[i].name) != fontico_icons[i].utf8) {
+          printf("FAIL bsearch missed %s\n", fontico_icons[i].name);
+          fails++;
+        }
+      }
+      /* ...which is only legal because the table is sorted. */
+      for (i = 1; i < FONTICO_ICON_COUNT; i++) {
+        if (strcmp(fontico_icons[i - 1].name, fontico_icons[i].name) >= 0) {
+          printf("FAIL table unsorted\n");
+          fails++;
+        }
+      }
+
+      /* An unknown name is NULL, never a wrong glyph. */
+      if (fontico_icon("nope") != NULL) { printf("FAIL unknown name\n"); fails++; }
+      if (fontico_icon(NULL) != NULL) { printf("FAIL null name\n"); fails++; }
+
+      /* The other unit links against this table rather than copying it. */
+      if (other_lookup("save") != fontico_icon("save")) {
+        printf("FAIL second translation unit has its own table\n");
+        fails++;
+      }
+      return fails;
+    }
+  CSRC
+
+  OTHER = <<~'CSRC'
+    #include "icons.h"
+    const char *other_lookup(const char *name) { return fontico_icon(name); }
+  CSRC
+
+  def cc
+    @cc ||= ENV["CC"] || %w[cc gcc clang].find { |c| Open3.capture3("command", "-v", c)[2].success? }
+  end
+
+  def compile(dir, *sources, out: "t")
+    Open3.capture3(cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-o", out, *sources, chdir: dir)
+  end
+
+  def test_the_generated_header_compiles_and_behaves
+    skip "no C compiler on PATH" unless cc
+
+    Dir.mktmpdir do |dir|
+      m = Fontico::Manifest.new(
+        { "targets" => { "c" => nil }, "providers" => { "lucide" => {} }, "icons" => ICONS }
+      )
+      lock = Fontico::Lockfile.new(File.join(dir, "icons.lock"))
+      m.icons.each { lock.store(_1.name, source: _1.source, body: "<path/>", size: 24) }
+
+      File.write(File.join(dir, "icons.h"),
+                 Fontico::Emitters::Header.new(m, m.icons.map { [_1, "<path/>"] }, lock: lock).call)
+      File.write(File.join(dir, "main.c"), MAIN)
+      File.write(File.join(dir, "other.c"), OTHER)
+
+      _, err, status = compile(dir, "main.c", "other.c")
+      assert_predicate status, :success?, "the header did not compile:\n#{err}"
+
+      ran, _, status = Open3.capture3("./t", chdir: dir)
+      assert_predicate status, :success?, "the compiled header misbehaved:\n#{ran}"
+    end
+  end
+
+  # Two units both claiming the table has to fail at the linker, not quietly
+  # ship two copies of it into a flash budget that cannot afford them.
+  def test_two_implementations_refuse_to_link
+    skip "no C compiler on PATH" unless cc
+
+    Dir.mktmpdir do |dir|
+      m = Fontico::Manifest.new(
+        { "targets" => { "c" => nil }, "providers" => { "lucide" => {} },
+          "icons" => { "save" => "lucide/save" } }
+      )
+      lock = Fontico::Lockfile.new(File.join(dir, "icons.lock"))
+      m.icons.each { lock.store(_1.name, source: _1.source, body: "<path/>", size: 24) }
+      File.write(File.join(dir, "icons.h"),
+                 Fontico::Emitters::Header.new(m, m.icons.map { [_1, "<path/>"] }, lock: lock).call)
+
+      impl = "#define FONTICO_ICONS_IMPLEMENTATION\n#include \"icons.h\"\n"
+      File.write(File.join(dir, "a.c"), "#{impl}int main(void) { return 0; }\n")
+      File.write(File.join(dir, "b.c"), "#{impl}const char *b(void) { return fontico_icon(\"save\"); }\n")
+
+      _, err, status = compile(dir, "a.c", "b.c")
+      refute_predicate status, :success?, "two implementations linked, so the table was duplicated"
+      assert_match(/duplicate/i, err)
+    end
+  end
+end
+
+# A GFXfont: icons as 1-bit bitmaps compiled into the binary, for a display
+# driven by Adafruit_GFX or Arduino_GFX. No font renderer and no filesystem on
+# the device, which is the whole point of it over the TTF target.
+class GfxFontTest < Minitest::Test
+  def node? = Fontico::NodeRunner.new.available?
+
+  # Rasterised from the TTF, so this builds one and reads it back.
+  def build(svgs, size: 24, targets: nil)
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, "icons"))
+      svgs.each { |name, body| File.write(File.join(root, "icons", "#{name}.svg"), body) }
+
+      m = Fontico::Manifest.new(
+        { "targets" => targets || { "ttf" => nil, "gfxfont" => { "size" => size } },
+          "providers" => { "local" => { "path" => "icons" } },
+          "icons" => svgs.keys.to_h { [_1, "local/#{_1}"] } }
+      )
+      yield Fontico::Builder.new(m, root: root, output: "builds"), root, m
+    end
+  end
+
+  def square(inset = 0)
+    "<svg viewBox='0 0 24 24'><path d='M#{inset} #{inset}h#{24 - 2 * inset}v#{24 - 2 * inset}" \
+      "H#{inset}z' fill='#000'/></svg>"
+  end
+
+  # Unpack the emitted C back into pixels. If the packing is wrong — row
+  # padding, bit order, offsets — a known shape is where it shows.
+  def unpack(header, name)
+    bytes = header[/_bitmaps\[\] PROGMEM = \{(.*?)\};/m, 1].scan(/0x(\h\h)/).flatten.map { _1.to_i(16) }
+    row = header[/\{\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(-?\d+),\s*(-?\d+)\s*\}, \/\* #{Regexp.escape(name)} \*\//]
+    off, w, h = row.scan(/-?\d+/).first(3).map(&:to_i)
+    rows = (0...h).map do |y|
+      (0...w).map { |x| bit = y * w + x; (bytes[off + bit / 8] >> (7 - bit % 8)) & 1 }
+    end
+    { width: w, height: h, rows: rows }
+  end
+
+  # A filled square fills its box. That one shape catches bit order, row
+  # padding and a transposed axis all at once.
+  def test_a_solid_square_rasterises_solid
+    skip "needs Node" unless node?
+
+    build({ "block" => square }) do |builder, root, _|
+      builder.call
+      g = unpack(File.read(File.join(root, "builds", "icons_font.h")), "block")
+
+      assert_operator g[:width], :>=, 20, "a full-em square should be about the em wide"
+      assert_operator g[:height], :>=, 20
+      assert(g[:rows].all? { |r| r.all?(1) },
+             "every pixel inside a filled square should be set:\n" \
+             "#{g[:rows].map { |r| r.map { _1 == 1 ? "#" : "." }.join }.join("\n")}")
+    end
+  end
+
+  # The hole in a ring has to stay a hole. Even-odd and nonzero disagree
+  # exactly here, and a gear or a wifi arc is nothing but this case.
+  def test_a_ring_keeps_its_hole
+    skip "needs Node" unless node?
+
+    # One path, one colour, two subpaths wound in opposite directions — which
+    # is how a real icon punches a hole, and the only thing nonzero winding
+    # reads differently from even-odd.
+    ring = "<svg viewBox='0 0 24 24'><path d='M0 0h24v24H0z M8 8v8h8V8z' fill='#000'/></svg>"
+    build({ "ring" => ring }) do |builder, root, _|
+      builder.call
+      g = unpack(File.read(File.join(root, "builds", "icons_font.h")), "ring")
+      centre = g[:rows][g[:height] / 2][g[:width] / 2]
+
+      assert_equal 0, centre, "the middle of a ring should be unset:\n" \
+                              "#{g[:rows].map { |r| r.map { _1 == 1 ? "#" : "." }.join }.join("\n")}"
+      assert_equal 1, g[:rows][0][0], "but the outside should still be filled"
+    end
+  end
+
+  # Char codes are positional, so their order has to come from something that
+  # only ever appends. The lockfile codepoints do; manifest order does not.
+  def test_char_codes_follow_the_append_only_codepoint_order
+    skip "needs Node" unless node?
+
+    build({ "aaa" => square, "bbb" => square(2), "ccc" => square(4) }) do |builder, root, _|
+      builder.call
+      header = File.read(File.join(root, "builds", "icons_font.h"))
+      lock = Fontico::Lockfile.new(File.join(root, "icons.lock"))
+
+      codes = header.scan(/^#define ICON_(\w+)\s+0x(\h\h)/).to_h { [_1.downcase, _2.to_i(16)] }
+      by_lock = codes.keys.sort_by { lock.codepoint_for(_1) }
+
+      assert_equal by_lock, codes.keys.sort_by { codes[_1] }
+      assert_equal 0x20, codes.values.min, "the range starts past the control characters"
+    end
+  end
+
+  def test_the_emitted_font_declares_the_range_it_fills
+    skip "needs Node" unless node?
+
+    build({ "a" => square, "b" => square(2) }) do |builder, root, _|
+      builder.call
+      header = File.read(File.join(root, "builds", "icons_font.h"))
+
+      assert_match(/0x20, 0x21, \d+/, header, "first/last should span exactly the two icons")
+      assert_includes header, "#ifndef _GFXFONT_H_" # yields to the real library
+      assert_includes header, "static const GFXfont fontico_icons24"
+    end
+  end
+
+  # A GFXfont is indexed off a byte. Failing here beats emitting a font that
+  # quietly stops at icon 224.
+  def test_too_many_icons_for_a_byte_is_refused
+    m = Fontico::Manifest.new(
+      { "targets" => { "gfxfont" => nil }, "providers" => { "local" => {} },
+        "icons" => (1..300).to_h { ["i#{_1}", "local/i#{_1}"] } }
+    )
+    Dir.mktmpdir do |dir|
+      lock = Fontico::Lockfile.new(File.join(dir, "icons.lock"))
+      m.icons.each { lock.store(_1.name, source: _1.source, body: "<path/>", size: 24) }
+
+      err = assert_raises(Fontico::Error) do
+        Fontico::Emitters::GfxFont.new(m, m.icons.map { [_1, "<path/>"] }, lock: lock).call
+      end
+      assert_match(/holds 224 icons/, err.message)
+      assert_match(/300/, err.message)
+      assert_match(/c target instead/, err.message, "should point at the target that has no such limit")
+    end
+  end
+
+  # Thin strokes fall through a one-bit threshold. Silence would mean an icon
+  # that draws as nothing at all.
+  def test_an_icon_that_rasterises_blank_is_refused
+    skip "needs Node" unless node?
+
+    # Filled, so the outliner is happy with it, but far too thin to survive a
+    # one-bit threshold once scaled down.
+    hairline = "<svg viewBox='0 0 24 24'><path d='M0 11.96h24v0.08H0z' fill='#000'/></svg>"
+    build({ "hair" => hairline }, size: 8) do |builder, _, _|
+      err = assert_raises(Fontico::Error) { builder.call }
+      assert_match(/rasterised blank at 8px/, err.message)
+      assert_match(/hair/, err.message)
+    end
+  end
+
+  def test_the_gfxfont_target_implies_and_follows_the_font
+    skip "needs Node" unless node?
+
+    build({ "a" => square }, targets: { "gfxfont" => nil }) do |builder, root, _|
+      report = builder.call
+
+      assert_path_exists File.join(root, "builds", "icons.ttf"), "gfxfont should imply ttf"
+      assert_path_exists File.join(root, "builds", "icons_font.h")
+      assert_operator report.written.index { _1.end_with?("icons.ttf") },
+                      :<,
+                      report.written.index { _1.end_with?("icons_font.h") },
+                      "the font it rasterises has to be built first"
+    end
+  end
+
+  def test_the_size_is_taken_from_the_manifest
+    skip "needs Node" unless node?
+
+    build({ "a" => square }, size: 32) do |builder, root, _|
+      builder.call
+      header = File.read(File.join(root, "builds", "icons_font.h"))
+
+      assert_includes header, "fontico_icons32"
+      assert_includes header, "rasterised at 32px"
+      assert_operator unpack(header, "a")[:height], :>=, 28, "a 32px em should be about 32px tall"
+    end
+  end
+
+  def test_the_generated_gfxfont_compiles
+    skip "needs Node" unless node?
+    cc = ENV["CC"] || %w[cc gcc clang].find { |c| Open3.capture3("command", "-v", c)[2].success? }
+    skip "no C compiler on PATH" unless cc
+
+    build({ "block" => square, "ring" => square(3) }) do |builder, root, _|
+      builder.call
+      dir = File.join(root, "builds")
+      File.write(File.join(dir, "use.c"), <<~C)
+        #include "icons_font.h"
+        int main(void) {
+          const GFXglyph *g = &fontico_icons24_glyphs[ICON_BLOCK - fontico_icons24.first];
+          return g->width > 0 && fontico_icons24.yAdvance > 0 ? 0 : 1;
+        }
+      C
+
+      _, err, status = Open3.capture3(cc, "-std=c99", "-Wall", "-Wextra", "-Werror",
+                                      "-o", "use", "use.c", chdir: dir)
+      assert_predicate status, :success?, "the gfxfont header did not compile:\n#{err}"
+
+      _, _, status = Open3.capture3("./use", chdir: dir)
+      assert_predicate status, :success?
+    end
+  end
+end
+
+# targets: as a mapping, so a firmware header can land in the device's
+# include/ directory instead of among the web artifacts.
+class TargetPathTest < Minitest::Test
+  def manifest(targets)
+    Fontico::Manifest.new(
+      { "targets" => targets, "providers" => { "lucide" => {} },
+        "icons" => { "save" => "lucide/save" } }
+    )
+  end
+
+  def test_a_list_names_targets_and_takes_default_locations
+    m = manifest(%w[sprite ttf])
+    assert_equal %w[sprite ttf], m.targets
+    assert_nil m.target_path("sprite")
+  end
+
+  def test_a_mapping_names_targets_and_may_place_them
+    m = manifest({ "sprite" => nil, "c" => "devs/esplay/include/icons.h" })
+    assert_equal %w[sprite c], m.targets
+    assert_nil m.target_path("sprite"), "a blank value means the default location"
+    assert_equal "devs/esplay/include/icons.h", m.target_path("c")
+  end
+
+  def test_anything_else_is_refused
+    err = assert_raises(Fontico::Manifest::Error) { manifest("sprite") }
+    assert_match(/targets: must be a list or a mapping/, err.message)
+  end
+
+  # The font emitter writes its own file through Node rather than handing back
+  # a string, so a placed ttf target needs its directory created before the
+  # emitter runs, not after it returns. Building into a fresh tree caught this.
+  def test_a_placed_font_target_gets_its_directory_before_the_emitter_runs
+    skip "font targets need Node" unless Fontico::NodeRunner.new.available?
+
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, "icons"))
+      File.write(File.join(root, "icons", "logo.svg"),
+                 "<svg viewBox='0 0 24 24'><path d='M4 4h16v16H4z'/></svg>")
+
+      m = Fontico::Manifest.new(
+        { "targets" => { "ttf" => "firmware/data/icons.ttf", "c" => "firmware/include/icons.h" },
+          "providers" => { "local" => { "path" => "icons" } },
+          "icons" => { "logo" => "local/logo" } }
+      )
+      Fontico::Builder.new(m, root: root, output: "builds").call
+
+      assert_path_exists File.join(root, "firmware/data/icons.ttf")
+      assert_path_exists File.join(root, "firmware/include/icons.h")
+    end
+  end
+
+  # The one invariant the device cannot check for itself: the header names
+  # codepoints, the font supplies glyphs at them, and a disagreement is an
+  # invisible box on a screen nobody is watching. Read back through the \x
+  # escapes a compiler would see, not the comments beside them.
+  def test_the_header_and_the_font_agree_on_every_codepoint
+    skip "font targets need Node" unless Fontico::NodeRunner.new.available?
+
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, "icons"))
+      names = %w[alpha beta gamma delta]
+      names.each_with_index do |n, i|
+        File.write(File.join(root, "icons", "#{n}.svg"),
+                   "<svg viewBox='0 0 24 24'><path d='M#{i + 2} #{i + 2}h10v10H#{i + 2}z'/></svg>")
+      end
+
+      m = Fontico::Manifest.new(
+        { "targets" => { "ttf" => nil, "c" => nil },
+          "providers" => { "local" => { "path" => "icons" } },
+          "icons" => names.to_h { [_1, "local/#{_1}"] } }
+      )
+      Fontico::Builder.new(m, root: root, output: "builds").call
+
+      font = TTFunk::File.open(File.join(root, "builds", "icons.ttf"))
+      in_font = font.cmap.unicode.first.code_map.keys.select { _1 >= 0xE000 }.sort
+
+      header = File.read(File.join(root, "builds", "icons.h"))
+      in_header = header.scan(/^#define ICON_\w+\s+"((?:\\x\h\h)+)"/).flatten.map do |literal|
+        literal.scan(/\\x(\h\h)/).flatten.map { _1.to_i(16) }.pack("C*").force_encoding("UTF-8").ord
+      end.sort
+
+      assert_equal names.size, in_header.size
+      assert_equal in_font, in_header, "the header names codepoints the font has no glyph for"
+    end
+  end
+
+  # The path is the point: it has to actually be written there.
+  def test_the_builder_writes_a_placed_target_where_it_was_told
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, "icons"))
+      File.write(File.join(root, "icons", "logo.svg"),
+                 "<svg viewBox='0 0 24 24'><path d='M9 9'/></svg>")
+
+      m = Fontico::Manifest.new(
+        { "targets" => { "sprite" => "firmware/assets/sprite.svg" },
+          "providers" => { "local" => { "path" => "icons" } },
+          "icons" => { "logo" => "local/logo" } }
+      )
+      report = Fontico::Builder.new(m, root: root, output: "builds").call
+      placed = File.join(root, "firmware/assets/sprite.svg")
+
+      assert_path_exists placed, "the directory has to be created too"
+      assert_includes File.read(placed), "M9 9"
+      assert_includes report.written, placed
+      refute_path_exists File.join(root, "builds", "icons.svg")
     end
   end
 end

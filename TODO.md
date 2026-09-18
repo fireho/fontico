@@ -122,8 +122,24 @@ reflexively.
 ## Also noted
 
 - `woff2` target still declared-but-skipped (see README Status).
+- The `c` target pairs with `ttf`, which means a firmware build needs Node.
+  Not a problem for a release box, but it makes `icons.h` an artifact a device
+  repo probably wants to commit rather than regenerate. `fontico:clobber`
+  leaves placed targets alone for that reason.
+- `gfxfont` is one size per build. A display drawing icons at two sizes wants
+  two of them, which works today but names them both `fontico_icons{N}` in
+  separate files — fine until someone includes both. A sizes: list emitting
+  one header with several fonts would be the fix, if it comes up.
+- The rasteriser thresholds at 0.5 coverage. There is no dithering and no
+  2-bit mode; `Arduino_GFX`'s `drawBitmap` is 1-bit anyway, and anti-aliasing
+  an icon into a colour-keyed blit is a different feature.
 
 ## Done
+
+- The `c` target: `icons.h` naming icons for firmware, with the UTF-8 bytes
+  as compile-time literals. A real compiler runs over the output in the suite,
+  and a separate test holds the header and the font to the same codepoints —
+  the one disagreement a device cannot detect for itself.
 
 - `icons_sprite` re-read the sprite off disk on every call. It is held in
   memory now, behind a stat, and dropped by `Fontico.reset!`. It was 20.8µs
