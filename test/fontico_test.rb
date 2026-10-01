@@ -1712,6 +1712,12 @@ class StylesheetTest < Minitest::Test
     assert_match(/vertical-align:\s*-0\.125em/, css)
   end
 
+  # Unlayered CSS beats every layered rule whatever the specificity, so a
+  # Tailwind 4 `size-5` (in `@layer utilities`) lost to `width: 1em`.
+  def test_sits_in_the_base_layer_so_a_size_class_wins
+    assert_match(%r{\A/\*[^*]*\*/\s*@layer base \{}, css)
+  end
+
   # An icon in a flex row gets squashed to zero without this.
   def test_opts_out_of_flex_shrinking
     assert_match(/flex:\s*none/, css)
